@@ -8,6 +8,11 @@
 
 /* Begin PBXFileReference section */
 		B41E38602F43D00A008A0F8A /* BitcoinStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BitcoinStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B41E386F2F43D1BC008A0F8A /* Architecture.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Architecture.md; sourceTree = "<group>"; };
+		B41E38702F43D1BC008A0F8A /* DataModel.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DataModel.md; sourceTree = "<group>"; };
+		B41E38712F43D1BC008A0F8A /* iOS_UIDesign.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = iOS_UIDesign.md; sourceTree = "<group>"; };
+		B41E38722F43D1BC008A0F8A /* MetricsDefinitions.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = MetricsDefinitions.md; sourceTree = "<group>"; };
+		B41E38732F43D1BC008A0F8A /* ProjectHandoff.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ProjectHandoff.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -32,6 +37,7 @@
 		B41E38572F43D00A008A0F8A = {
 			isa = PBXGroup;
 			children = (
+				B41E386E2F43D068008A0F8A /* Documentation */,
 				B41E38622F43D00A008A0F8A /* BitcoinStats */,
 				B41E38612F43D00A008A0F8A /* Products */,
 			);
@@ -43,6 +49,18 @@
 				B41E38602F43D00A008A0F8A /* BitcoinStats.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B41E386E2F43D068008A0F8A /* Documentation */ = {
+			isa = PBXGroup;
+			children = (
+				B41E386F2F43D1BC008A0F8A /* Architecture.md */,
+				B41E38702F43D1BC008A0F8A /* DataModel.md */,
+				B41E38712F43D1BC008A0F8A /* iOS_UIDesign.md */,
+				B41E38722F43D1BC008A0F8A /* MetricsDefinitions.md */,
+				B41E38732F43D1BC008A0F8A /* ProjectHandoff.md */,
+			);
+			path = Documentation;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -79,6 +97,7 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
+				ORGANIZATIONNAME = "About Objects";
 				TargetAttributes = {
 					B41E385F2F43D00A008A0F8A = {
 						CreatedOnToolsVersion = 26.2;
@@ -256,9 +275,12 @@
 				DEVELOPMENT_TEAM = QJJFB4XBRT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Bitcoin Stats";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDarkContent;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -269,6 +291,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.aboutobjects.BitcoinStats;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -288,9 +313,12 @@
 				DEVELOPMENT_TEAM = QJJFB4XBRT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Bitcoin Stats";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDarkContent;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -301,6 +329,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.aboutobjects.BitcoinStats;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
