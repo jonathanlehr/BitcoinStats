@@ -25,6 +25,7 @@
 		B41E38732F43D1BC008A0F8A /* ProjectHandoff.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ProjectHandoff.md; sourceTree = "<group>"; };
 		B41E38C12F43DD21008A0F8A /* BitcoinStatsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BitcoinStatsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B41E38DF2F43F116008A0F8A /* Swift6_Concurrency_Notes.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Swift6_Concurrency_Notes.md; sourceTree = "<group>"; };
+		B46567612F490A590017F4C3 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -86,6 +87,7 @@
 				B41E38712F43D1BC008A0F8A /* iOS_UIDesign.md */,
 				B41E38722F43D1BC008A0F8A /* MetricsDefinitions.md */,
 				B41E38732F43D1BC008A0F8A /* ProjectHandoff.md */,
+				B46567612F490A590017F4C3 /* CLAUDE.md */,
 			);
 			path = Documentation;
 			sourceTree = "<group>";
