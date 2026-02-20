@@ -26,6 +26,8 @@
 		B41E38C12F43DD21008A0F8A /* BitcoinStatsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BitcoinStatsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B41E38DF2F43F116008A0F8A /* Swift6_Concurrency_Notes.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Swift6_Concurrency_Notes.md; sourceTree = "<group>"; };
 		B46567612F490A590017F4C3 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
+		B46567632F490D5B0017F4C3 /* ClaudeWorkflow.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ClaudeWorkflow.md; sourceTree = "<group>"; };
+		B46567642F49116F0017F4C3 /* StartingClaude.markdown */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = StartingClaude.markdown; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -62,6 +64,7 @@
 		B41E38572F43D00A008A0F8A = {
 			isa = PBXGroup;
 			children = (
+				B46567622F490D310017F4C3 /* Notes */,
 				B41E386E2F43D068008A0F8A /* Documentation */,
 				B41E38622F43D00A008A0F8A /* BitcoinStats */,
 				B41E38C22F43DD21008A0F8A /* BitcoinStatsTests */,
@@ -90,6 +93,15 @@
 				B46567612F490A590017F4C3 /* CLAUDE.md */,
 			);
 			path = Documentation;
+			sourceTree = "<group>";
+		};
+		B46567622F490D310017F4C3 /* Notes */ = {
+			isa = PBXGroup;
+			children = (
+				B46567632F490D5B0017F4C3 /* ClaudeWorkflow.md */,
+				B46567642F49116F0017F4C3 /* StartingClaude.markdown */,
+			);
+			path = Notes;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
