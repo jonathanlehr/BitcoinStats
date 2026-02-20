@@ -20,11 +20,12 @@ enum PriceOverlay: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .ma200week: .orange
+        case .ma200week: .red
         case .ma200day: .blue
         case .ma50day: .purple
-        case .ma20week, .ema21week: .green
-        case .bullMarketSupportBand: .green.opacity(0.2)
+        case .ma20week: .teal
+        case .ema21week: .green
+        case .bullMarketSupportBand: .mint
         case .realizedPrice: .pink
         }
     }

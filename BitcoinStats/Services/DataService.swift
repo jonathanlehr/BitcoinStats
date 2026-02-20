@@ -90,6 +90,15 @@ class DataService {
         return try viewContext.fetch(request).first
     }
 
+    /// Returns the oldest metric of a given type, or nil if none exists.
+    func oldestMetric(type: MetricType) throws -> Metric? {
+        let request = NSFetchRequest<Metric>(entityName: "Metric")
+        request.predicate = NSPredicate(format: "metricTypeRaw == %@", type.rawValue)
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \Metric.timestamp, ascending: true)]
+        request.fetchLimit = 1
+        return try viewContext.fetch(request).first
+    }
+
     /// Deletes all metrics of a given type.
     func deleteMetrics(type: MetricType) throws {
         let request = NSFetchRequest<Metric>(entityName: "Metric")
