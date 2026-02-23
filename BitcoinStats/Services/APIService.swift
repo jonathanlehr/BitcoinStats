@@ -6,11 +6,17 @@
 //
 
 import Foundation
+import os
 
 /// Handles all network requests to the mempool.space API.
 /// `nonisolated` opts this type out of the project's default MainActor isolation —
-/// network services don't need actor isolation.
+/// network services don't need actor handling.
 nonisolated final class APIService: Sendable {
+
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "BitcoinStats",
+        category: "APIService"
+    )
 
     private let client: HTTPClient
     private let baseURL: URL
@@ -121,7 +127,15 @@ nonisolated final class APIService: Sendable {
         let request = URLRequest(url: url)
         let (data, response) = try await client.data(for: request)
         try validate(response)
-        return try JSONDecoder().decode(HashrateResponse.self, from: data)
+        do {
+            return try JSONDecoder().decode(HashrateResponse.self, from: data)
+        } catch {
+            // Log the raw response so field names can be inspected in the console.
+            let preview = String(data: data.prefix(2000), encoding: .utf8) ?? "<unreadable>"
+            Self.logger.error("HashrateResponse decode failed: \(error, privacy: .public)")
+            Self.logger.error("Raw response (first 2000 chars): \(preview, privacy: .public)")
+            throw error
+        }
     }
 
     /// Fetches recent difficulty adjustments.
@@ -209,11 +223,14 @@ nonisolated struct RecommendedFeesResponse: Codable, Sendable {
 }
 
 /// Response from `GET /api/v1/mining/hashrate/:timePeriod`.
+/// `currentHashrate` and `currentDifficulty` are present on short-range requests
+/// (e.g. "1m") but omitted by mempool.space on the "all" endpoint.
+/// `difficulty` is intentionally omitted — its element structure varies by time period
+/// and we don't need it for hash rate display.
 nonisolated struct HashrateResponse: Codable, Sendable {
     let hashrates: [HashrateDataPoint]
-    let difficulty: [DifficultyDataPoint]
-    let currentHashrate: Double
-    let currentDifficulty: Double
+    let currentHashrate: Double?
+    let currentDifficulty: Double?
 }
 
 nonisolated struct HashrateDataPoint: Codable, Sendable {

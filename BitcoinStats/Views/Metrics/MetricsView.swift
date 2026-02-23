@@ -10,11 +10,28 @@ import SwiftUI
 struct MetricsView: View {
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(
-                "On-Chain Metrics",
-                systemImage: "chart.xyaxis.line",
-                description: Text("Valuation, network, and holder metrics — coming soon.")
-            )
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12, pinnedViews: .sectionHeaders) {
+                    Section {
+                        NavigationLink {
+                            HashRateView()
+                        } label: {
+                            MetricCard(
+                                title: MetricType.hashRate.rawValue,
+                                description: MetricType.hashRate.description,
+                                systemImage: "bolt.fill",
+                                tint: .indigo
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    } header: {
+                        Text("Network")
+                            .font(.title3.weight(.semibold))
+                            .padding(.top, 8)
+                    }
+                }
+                .padding(.horizontal)
+            }
             .navigationTitle("Metrics")
         }
     }

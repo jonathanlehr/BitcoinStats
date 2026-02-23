@@ -6,9 +6,15 @@
 //
 
 import Foundation
+import os
 
 @Observable
 class PriceViewModel {
+
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "BitcoinStats",
+        category: "PriceViewModel"
+    )
 
     // MARK: - Published State
 
@@ -28,6 +34,14 @@ class PriceViewModel {
         get { UserPreferences.shared.selectedTimeRange }
         set { UserPreferences.shared.selectedTimeRange = newValue }
     }
+
+    // MARK: - In-Memory Granular Cache
+
+    private struct GranularCacheEntry {
+        let data: [ChartDataPoint]
+        let fetchedAt: Date
+    }
+    private var granularCache: [TimeRange: GranularCacheEntry] = [:]
 
     // MARK: - Dependencies
 
@@ -59,50 +73,79 @@ class PriceViewModel {
         defer { isLoading = false }
         error = nil
 
+        // Step 1 — Current price (mempool.space, fast).
         do {
-            // Always refresh the live price (fast, single value).
+            Self.logger.info("Fetching current price from mempool.space")
             let price = try await api.fetchCurrentPrice()
             currentPrice = price.USD
+            Self.logger.info("Current price: $\(String(format: "%.0f", price.USD), privacy: .public)")
+        } catch {
+            Self.logger.error("Current price fetch failed: \(error, privacy: .public)")
+            self.error = error.localizedDescription
+        }
 
-            // Ensure we have comprehensive all-time daily history for MA computation.
-            // Fetches CoinGecko's full dataset once; re-fetches only when stale (> 24 h)
-            // or when we don't have enough history for the 200-week MA.
-            if needsHistoryRefresh() {
+        // Step 2 — Granular display data for short ranges (CoinGecko, ≤ 90 days).
+        // Fetched *before* the heavy all-time history so the chart is immediately responsive.
+        // CoinGecko returns sub-hourly for days=1, hourly for days=2–90.
+        // Results are cached in memory for 24 hours so switching ranges doesn't re-fetch.
+        if selectedTimeRange.days <= 90 {
+            let range = selectedTimeRange
+            let cacheAge = granularCache[range].map { Date().timeIntervalSince($0.fetchedAt) } ?? .infinity
+            if cacheAge < 86_400, let entry = granularCache[range] {
+                Self.logger.debug("Granular cache hit for \(range.rawValue, privacy: .public) (age \(Int(cacheAge), privacy: .public)s)")
+                priceHistory = entry.data
+                if currentPrice == nil { currentPrice = priceHistory.last?.value }
+            } else {
+                do {
+                    Self.logger.info("Fetching granular data (days=\(self.selectedTimeRange.days, privacy: .public)) from CoinGecko")
+                    let chart = try await supplementaryAPI.fetchMarketChart(
+                        days: String(selectedTimeRange.days)
+                    )
+                    Self.logger.info("Received \(chart.prices.count) granular price points")
+                    let points = chart.prices.map { point in
+                        ChartDataPoint(
+                            date: Date(timeIntervalSince1970: point[0] / 1000),
+                            value: point[1]
+                        )
+                    }
+                    granularCache[range] = GranularCacheEntry(data: points, fetchedAt: Date())
+                    priceHistory = points
+                    if currentPrice == nil { currentPrice = priceHistory.last?.value }
+                } catch {
+                    Self.logger.error("Granular display fetch failed: \(error, privacy: .public)")
+                    self.error = error.localizedDescription
+                }
+            }
+        }
+
+        // Step 3 — All-time daily history for MA computation (CoinGecko, days=max).
+        // Fetched after the display data so step 2 is never blocked by this slower request.
+        // Failures here are non-fatal: MAs simply won't render until the next successful fetch.
+        if needsHistoryRefresh() {
+            do {
+                Self.logger.info("Fetching full price history (days=max) from CoinGecko")
                 let chart = try await supplementaryAPI.fetchMarketChart(days: "max")
+                Self.logger.info("Received \(chart.prices.count) price points — saving to CoreData")
                 try dataService.deleteMetrics(type: .price)
                 let responses = chart.prices.map { point in
-                    // CoinGecko timestamps are milliseconds.
                     APIMetricResponse(
                         timestamp: Date(timeIntervalSince1970: point[0] / 1000),
                         value: point[1]
                     )
                 }
                 try dataService.saveMetrics(type: .price, responses: responses)
+                Self.logger.info("Price history save complete")
+                if selectedTimeRange.days > 90 { loadFromCache() }
+            } catch {
+                Self.logger.error("Full history fetch failed: \(error, privacy: .public)")
+                if selectedTimeRange.days > 90 { loadFromCache() }
             }
-
-            // For short display ranges CoinGecko returns granular hourly data (≤ 90 days).
-            // Fetch it directly into priceHistory for a smooth chart; don't write to CoreData
-            // to avoid mixing daily and sub-daily timestamps.
-            if selectedTimeRange.days <= 90 {
-                let displayChart = try await supplementaryAPI.fetchMarketChart(
-                    days: String(selectedTimeRange.days)
-                )
-                priceHistory = displayChart.prices.map { point in
-                    ChartDataPoint(
-                        date: Date(timeIntervalSince1970: point[0] / 1000),
-                        value: point[1]
-                    )
-                }
-                if currentPrice == nil { currentPrice = priceHistory.last?.value }
-            } else {
-                loadFromCache()
-            }
-
-            computeOverlays()
-
-        } catch {
-            self.error = error.localizedDescription
+        } else {
+            Self.logger.debug("Price history is current — skipping full history fetch")
+            if selectedTimeRange.days > 90 { loadFromCache() }
         }
+
+        computeOverlays()
     }
 
     // MARK: - Overlay Toggling
