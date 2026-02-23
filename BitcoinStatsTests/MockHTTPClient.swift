@@ -15,24 +15,45 @@ import Foundation
 /// `@unchecked Sendable` because tests are serialized — no actual data race risk.
 nonisolated final class MockHTTPClient: HTTPClient, @unchecked Sendable {
 
-    /// The data to return from `data(for:)`.
+    /// The data to return from `data(for:)` when `orderedResponses` is exhausted.
     var responseData: Data = Data()
 
-    /// The HTTP status code to use in the response. Defaults to 200.
+    /// The HTTP status code to use when `orderedResponses` is exhausted. Defaults to 200.
     var statusCode: Int = 200
+
+    /// Optional per-call responses consumed in order. Each call pops the next entry;
+    /// when the queue is exhausted, `responseData`/`statusCode` are used as the fallback.
+    /// Use this to stub multi-call sequences (e.g. granular success → history failure).
+    var orderedResponses: [(data: Data, statusCode: Int)] = []
 
     /// The last request that was passed to `data(for:)`.
     private(set) var lastRequest: URLRequest?
 
+    /// All requests passed to `data(for:)` in order.
+    private(set) var allRequests: [URLRequest] = []
+
+    private var orderedResponseIndex = 0
+
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         lastRequest = request
+        allRequests.append(request)
+        let (data, code): (Data, Int)
+        if orderedResponseIndex < orderedResponses.count {
+            let entry = orderedResponses[orderedResponseIndex]
+            orderedResponseIndex += 1
+            data = entry.data
+            code = entry.statusCode
+        } else {
+            data = responseData
+            code = statusCode
+        }
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: statusCode,
+            statusCode: code,
             httpVersion: nil,
             headerFields: nil
         )!
-        return (responseData, response)
+        return (data, response)
     }
 }
 

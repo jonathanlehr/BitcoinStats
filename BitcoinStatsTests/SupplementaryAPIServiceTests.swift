@@ -111,6 +111,61 @@ struct SupplementaryAPIServiceTests {
         }
     }
 
+    // MARK: - CoinGecko API Key Header
+
+    @Test func fetchMarketChartSendsAPIKeyHeaderWhenPresent() async throws {
+        let mock = MockHTTPClient()
+        mock.responseData = CannedSupplementaryJSON.coinGeckoMarketChart
+        let service = SupplementaryAPIService(client: mock, coinGeckoAPIKey: "test-key-abc")
+
+        _ = try await service.fetchMarketChart(days: "max")
+
+        #expect(mock.lastRequest?.value(forHTTPHeaderField: "x-cg-demo-api-key") == "test-key-abc")
+    }
+
+    @Test func fetchMarketChartOmitsAPIKeyHeaderWhenNil() async throws {
+        let mock = MockHTTPClient()
+        mock.responseData = CannedSupplementaryJSON.coinGeckoMarketChart
+        let service = SupplementaryAPIService(client: mock, coinGeckoAPIKey: nil)
+
+        _ = try await service.fetchMarketChart(days: "30")
+
+        #expect(mock.lastRequest?.value(forHTTPHeaderField: "x-cg-demo-api-key") == nil)
+    }
+
+    @Test func fetchMarketChartTreatsEmptyStringKeyAsAbsent() async throws {
+        let mock = MockHTTPClient()
+        mock.responseData = CannedSupplementaryJSON.coinGeckoMarketChart
+        let service = SupplementaryAPIService(client: mock, coinGeckoAPIKey: "")
+
+        _ = try await service.fetchMarketChart(days: "30")
+
+        #expect(mock.lastRequest?.value(forHTTPHeaderField: "x-cg-demo-api-key") == nil)
+    }
+
+    @Test func fetchMarketDataSendsAPIKeyHeaderWhenPresent() async throws {
+        let mock = MockHTTPClient()
+        mock.responseData = CannedSupplementaryJSON.coinGeckoMarketData
+        let service = SupplementaryAPIService(client: mock, coinGeckoAPIKey: "test-key-abc")
+
+        _ = try await service.fetchMarketData()
+
+        #expect(mock.lastRequest?.value(forHTTPHeaderField: "x-cg-demo-api-key") == "test-key-abc")
+    }
+
+    @Test func fetchMarketChartThrowsSpecific401Error() async throws {
+        let mock = MockHTTPClient()
+        mock.statusCode = 401
+        let service = SupplementaryAPIService(client: mock)
+
+        let thrownError = await #expect(throws: APIError.self) {
+            _ = try await service.fetchMarketChart(days: "max")
+        }
+        if case .httpError(let code) = thrownError {
+            #expect(code == 401)
+        }
+    }
+
     // MARK: - Blockchain.com Chart Data
 
     @Test func fetchChartDataDecodesResponse() async throws {
@@ -197,6 +252,40 @@ struct SupplementaryAPIServiceTests {
         await #expect(throws: APIError.self) {
             _ = try await service.fetchStat(name: "nonexistent")
         }
+    }
+}
+
+// MARK: - Bundle Configuration
+
+/// Verifies that the app bundle contains the CoinGecko API key and that the default
+/// SupplementaryAPIService init reads it and sends it as a request header.
+///
+/// These tests catch build configuration regressions (e.g. INFOPLIST_KEY_* entries
+/// missing from the pbxproj) that pure unit tests with injected keys cannot detect.
+/// They pass because the test target uses BUNDLE_LOADER / TEST_HOST, so Bundle.main
+/// is the app bundle, not the test bundle.
+@Suite(.serialized)
+struct BundleConfigurationTests {
+
+    @Test func coinGeckoAPIKeyPresentInBundle() {
+        let key = Bundle.main.object(forInfoDictionaryKey: "COINGECKO_API_KEY") as? String
+        #expect(key != nil, "COINGECKO_API_KEY missing from app Info.plist — check INFOPLIST_KEY_COINGECKO_API_KEY in project build settings")
+        #expect(key?.isEmpty == false, "COINGECKO_API_KEY is present but empty")
+    }
+
+    @Test func defaultServiceInitSendsAPIKeyHeader() async throws {
+        let mock = MockHTTPClient()
+        mock.responseData = CannedSupplementaryJSON.coinGeckoMarketChart
+
+        // Default init reads the key from Bundle.main — same code path as production.
+        let service = SupplementaryAPIService(client: mock)
+
+        _ = try await service.fetchMarketChart(days: "1")
+
+        let sentKey = mock.lastRequest?.value(forHTTPHeaderField: "x-cg-demo-api-key")
+        let bundleKey = Bundle.main.object(forInfoDictionaryKey: "COINGECKO_API_KEY") as? String
+        #expect(sentKey != nil, "x-cg-demo-api-key header was not sent — key may not be in bundle")
+        #expect(sentKey == bundleKey, "Header value does not match the key in Bundle.main")
     }
 }
 

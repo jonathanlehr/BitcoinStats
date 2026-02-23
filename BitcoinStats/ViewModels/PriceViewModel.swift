@@ -123,14 +123,20 @@ class PriceViewModel {
         // Failures here are non-fatal: MAs simply won't render until the next successful fetch.
         if needsHistoryRefresh() {
             do {
-                Self.logger.info("Fetching full price history (days=max) from CoinGecko")
-                let chart = try await supplementaryAPI.fetchMarketChart(days: "max")
-                Self.logger.info("Received \(chart.prices.count) price points — saving to CoreData")
+                // CoinGecko Demo tier caps historical data at 365 days (error 10012).
+                // Use blockchain.com instead — no auth required, supports timespan=all
+                // back to 2010, giving us the full history needed for MA calculations.
+                Self.logger.info("Fetching full price history from blockchain.com")
+                let chart = try await supplementaryAPI.fetchChartData(
+                    chartName: .marketPrice, timespan: "all"
+                )
+                Self.logger.info("Received \(chart.values.count) price points — saving to CoreData")
                 try dataService.deleteMetrics(type: .price)
-                let responses = chart.prices.map { point in
+                let responses = chart.values.map { point in
+                    // blockchain.com timestamps are Unix seconds (not ms like CoinGecko).
                     APIMetricResponse(
-                        timestamp: Date(timeIntervalSince1970: point[0] / 1000),
-                        value: point[1]
+                        timestamp: Date(timeIntervalSince1970: TimeInterval(point.x)),
+                        value: point.y
                     )
                 }
                 try dataService.saveMetrics(type: .price, responses: responses)
@@ -138,7 +144,14 @@ class PriceViewModel {
                 if selectedTimeRange.days > 90 { loadFromCache() }
             } catch {
                 Self.logger.error("Full history fetch failed: \(error, privacy: .public)")
-                if selectedTimeRange.days > 90 { loadFromCache() }
+                if selectedTimeRange.days > 90 {
+                    loadFromCache()
+                    // Surface the error when there's no cached data to fall back on,
+                    // so the user sees a message instead of a blank chart.
+                    if priceHistory.isEmpty {
+                        self.error = error.localizedDescription
+                    }
+                }
             }
         } else {
             Self.logger.debug("Price history is current — skipping full history fetch")

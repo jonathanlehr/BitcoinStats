@@ -6,24 +6,41 @@
 //
 
 import Foundation
+import os
 
 /// Handles network requests to supplementary data sources:
 /// CoinGecko (market cap, historical price) and blockchain.com (realized cap, active addresses).
 /// `nonisolated` opts this type out of the project's default MainActor isolation.
 nonisolated final class SupplementaryAPIService: Sendable {
 
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "BitcoinStats",
+        category: "SupplementaryAPIService"
+    )
+
     private let client: HTTPClient
     private let coinGeckoBaseURL: URL
     private let blockchainBaseURL: URL
+    /// Optional CoinGecko Demo API key. Set via `x-cg-demo-api-key` header.
+    /// Required for `days=max` on the free tier. Obtain at https://www.coingecko.com/en/api/pricing
+    private let coinGeckoAPIKey: String?
 
     init(
         client: HTTPClient = URLSession.shared,
         coinGeckoBaseURL: URL = URL(string: "https://api.coingecko.com")!,
-        blockchainBaseURL: URL = URL(string: "https://api.blockchain.info")!
+        blockchainBaseURL: URL = URL(string: "https://api.blockchain.info")!,
+        coinGeckoAPIKey: String? = Bundle.main.object(forInfoDictionaryKey: "COINGECKO_API_KEY") as? String
     ) {
         self.client = client
         self.coinGeckoBaseURL = coinGeckoBaseURL
         self.blockchainBaseURL = blockchainBaseURL
+        let key = coinGeckoAPIKey?.isEmpty == false ? coinGeckoAPIKey : nil
+        self.coinGeckoAPIKey = key
+        if key != nil {
+            Self.logger.info("CoinGecko API key loaded from bundle")
+        } else {
+            Self.logger.warning("No CoinGecko API key found — days=max requests will likely 401")
+        }
     }
 
     // MARK: - CoinGecko Endpoints
@@ -46,7 +63,8 @@ nonisolated final class SupplementaryAPIService: Sendable {
             URLQueryItem(name: "include_24hr_change", value: "true")
         ]
 
-        let request = URLRequest(url: components.url!)
+        var request = URLRequest(url: components.url!)
+        if let key = coinGeckoAPIKey { request.setValue(key, forHTTPHeaderField: "x-cg-demo-api-key") }
         let (data, response) = try await client.data(for: request)
         try validate(response)
         return try JSONDecoder().decode(CoinGeckoMarketResponse.self, from: data)
@@ -67,8 +85,14 @@ nonisolated final class SupplementaryAPIService: Sendable {
             URLQueryItem(name: "days", value: days)
         ]
 
-        let request = URLRequest(url: components.url!)
+        var request = URLRequest(url: components.url!)
+        if let key = coinGeckoAPIKey { request.setValue(key, forHTTPHeaderField: "x-cg-demo-api-key") }
+        Self.logger.debug("fetchMarketChart → \(request.url?.absoluteString ?? "nil", privacy: .public) | key present: \(self.coinGeckoAPIKey != nil, privacy: .public)")
         let (data, response) = try await client.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let body = String(data: data.prefix(500), encoding: .utf8) ?? "<unreadable>"
+            Self.logger.error("fetchMarketChart days=\(days, privacy: .public) → HTTP \(http.statusCode, privacy: .public): \(body, privacy: .public)")
+        }
         try validate(response)
         return try JSONDecoder().decode(CoinGeckoChartResponse.self, from: data)
     }
@@ -155,6 +179,7 @@ nonisolated struct CoinGeckoChartResponse: Codable, Sendable {
 
 /// Available chart names from blockchain.com charts API.
 nonisolated enum BlockchainChartName: String {
+    case marketPrice = "market-price"
     case marketCap = "market-cap"
     case totalBitcoins = "total-bitcoins"
     case nUniqueAddresses = "n-unique-addresses"

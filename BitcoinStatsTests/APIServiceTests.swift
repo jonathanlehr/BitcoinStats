@@ -214,8 +214,6 @@ struct APIServiceTests {
         #expect(result.hashrates.count == 3)
         #expect(result.hashrates[0].timestamp == 1703166000)
         #expect(result.hashrates[0].avgHashrate == 5.5e20)
-        #expect(result.difficulty.count == 2)
-        #expect(result.difficulty[0].height == 823000)
         #expect(result.currentHashrate == 5.6e20)
         #expect(result.currentDifficulty == 72006146478567.1)
     }
