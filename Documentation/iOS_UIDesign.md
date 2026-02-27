@@ -40,7 +40,6 @@ Three main tabs provide clear separation of concerns and familiar iOS patterns.
 ├─────────────────────────────┤
 │ Overlays:                   │
 │ [✓ 200w MA] [Bull Band]    │
-│ [50d MA] [Realized Price]   │
 ├─────────────────────────────┤
 │ ⏱️  1D  1W  1M  3M  1Y  All │
 └─────────────────────────────┘

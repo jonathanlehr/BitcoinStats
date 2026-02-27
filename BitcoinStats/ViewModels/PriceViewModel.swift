@@ -20,10 +20,10 @@ class PriceViewModel {
 
     private(set) var priceHistory: [ChartDataPoint] = []
     private(set) var overlayData: [PriceOverlay: [ChartDataPoint]] = [:]
-    /// Lower boundary of the Bull Market Support Band (20W SMA vs 21W EMA, whichever is lower).
-    private(set) var bullBandLower: [ChartDataPoint] = []
-    /// Upper boundary of the Bull Market Support Band.
-    private(set) var bullBandUpper: [ChartDataPoint] = []
+    /// 20-week SMA component of the Bull Market Support Band.
+    private(set) var bullBandSMA: [ChartDataPoint] = []
+    /// 21-week EMA component of the Bull Market Support Band.
+    private(set) var bullBandEMA: [ChartDataPoint] = []
     private(set) var currentPrice: Double?
     private(set) var isLoading = false
     private(set) var error: String?
@@ -214,8 +214,20 @@ class PriceViewModel {
 
         var result: [PriceOverlay: [ChartDataPoint]] = [:]
 
+        // All week-based indicators use weekly-resampled data.
+        // Compute weeklyPoints once whenever any of them is needed.
+        let needWeekly = enabled.contains(.ma200week)
+            || enabled.contains(.ma20week)
+            || enabled.contains(.ema21week)
+            || enabled.contains(.bullMarketSupportBand)
+
+        var weeklyPoints: [ChartDataPoint] = []
+        if needWeekly {
+            weeklyPoints = CalculationService.weeklyResample(data: allPoints)
+        }
+
         if enabled.contains(.ma200week) {
-            let ma = CalculationService.sma(data: allPoints, period: CalculationService.period200WeekMA)
+            let ma = CalculationService.sma(data: weeklyPoints, period: CalculationService.period200WeekMA)
             result[.ma200week] = filtered(ma)
         }
 
@@ -229,8 +241,7 @@ class PriceViewModel {
             result[.ma50day] = filtered(ma)
         }
 
-        // 20W SMA and 21W EMA are computed together: both may be needed by the Bull Band
-        // even when neither individual overlay is enabled.
+        // 20W SMA and 21W EMA: computed on weekly data with their true weekly periods.
         let needSMA20 = enabled.contains(.ma20week) || enabled.contains(.bullMarketSupportBand)
         let needEMA21 = enabled.contains(.ema21week) || enabled.contains(.bullMarketSupportBand)
 
@@ -238,40 +249,50 @@ class PriceViewModel {
         var ema21: [ChartDataPoint] = []
 
         if needSMA20 {
-            sma20 = CalculationService.sma(data: allPoints, period: CalculationService.period20WeekMA)
+            sma20 = CalculationService.sma(data: weeklyPoints, period: CalculationService.period20WeekMA)
             if enabled.contains(.ma20week) {
                 result[.ma20week] = filtered(sma20)
             }
         }
 
         if needEMA21 {
-            ema21 = CalculationService.ema(data: allPoints, period: CalculationService.period21WeekEMA)
+            ema21 = CalculationService.ema(data: weeklyPoints, period: CalculationService.period21WeekEMA)
             if enabled.contains(.ema21week) {
                 result[.ema21week] = filtered(ema21)
             }
         }
 
-        // Bull Market Support Band: filled area between the date-aligned 20W SMA and 21W EMA.
-        // Both series are computed from the same `allPoints` array, so their dates are exact
-        // matches at every shared index — dictionary lookup is lossless.
+        // Realized price — loaded from CoreData (populated by Step 4 in load()).
+        if enabled.contains(.realizedPrice) {
+            let metrics = (try? dataService.fetchMetrics(type: .realizedPrice)) ?? []
+            let points = metrics.compactMap { m -> ChartDataPoint? in
+                guard let date = m.timestamp else { return nil }
+                return ChartDataPoint(date: date, value: m.value)
+            }
+            result[.realizedPrice] = filtered(points)
+        }
+
+        // Bull Market Support Band: 20W SMA and 21W EMA stored as their actual values.
+        // Do NOT force min/max ordering — the lines cross in real data, and that crossing
+        // is a meaningful signal that must be preserved.
         if enabled.contains(.bullMarketSupportBand), !sma20.isEmpty, !ema21.isEmpty {
             let smaFiltered = filtered(sma20)
             let emaByDate = Dictionary(
                 uniqueKeysWithValues: filtered(ema21).map { ($0.date, $0.value) }
             )
-            var lower: [ChartDataPoint] = []
-            var upper: [ChartDataPoint] = []
+            var smaPoints: [ChartDataPoint] = []
+            var emaPoints: [ChartDataPoint] = []
             for s in smaFiltered {
                 if let e = emaByDate[s.date] {
-                    lower.append(ChartDataPoint(date: s.date, value: Swift.min(s.value, e)))
-                    upper.append(ChartDataPoint(date: s.date, value: Swift.max(s.value, e)))
+                    smaPoints.append(ChartDataPoint(date: s.date, value: s.value))
+                    emaPoints.append(ChartDataPoint(date: s.date, value: e))
                 }
             }
-            bullBandLower = lower
-            bullBandUpper = upper
+            bullBandSMA = smaPoints
+            bullBandEMA = emaPoints
         } else {
-            bullBandLower = []
-            bullBandUpper = []
+            bullBandSMA = []
+            bullBandEMA = []
         }
 
         overlayData = result
@@ -279,7 +300,7 @@ class PriceViewModel {
 
     /// Returns true when the stored daily price history should be re-fetched:
     /// - No data exists.
-    /// - Fewer than 1,400 records (not enough for the 200-week MA).
+    /// - Fewer than 1,400 daily data points (not enough to resample into 200 weekly candles).
     /// - The latest record is older than 24 hours.
     private func needsHistoryRefresh() -> Bool {
         guard let latest = try? dataService.latestMetric(type: .price),
@@ -292,7 +313,10 @@ class PriceViewModel {
               let oldestTimestamp = oldest.timestamp else {
             return true
         }
-        let requiredSpan = TimeInterval(CalculationService.period200WeekMA) * 86_400
+        // minDailyHistory = 1400 days — enough raw data for weeklyResample to produce
+        // 200 weekly candles for the 200W MA.
+        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * 86_400
         return Date().timeIntervalSince(oldestTimestamp) < requiredSpan
     }
+
 }

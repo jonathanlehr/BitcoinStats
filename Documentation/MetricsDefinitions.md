@@ -35,7 +35,7 @@
 
 **Data Source:** 
 - Market cap from mempool.space
-- Realized cap from blockchain.com or CoinMetrics
+- Realized cap requires a paid API (Glassnode, CoinMetrics) — deferred to V2
 
 **Interpretation:**
 - **< 1.0**: Market trading below aggregate cost basis (historically undervalued)
@@ -58,6 +58,14 @@
 - Represents the aggregate cost basis of all Bitcoin holders
 - Acts as a macro support/resistance level
 - Price tends to bounce off realized price during bear markets
+
+**Data Source Status:** ⚠️ Deferred — no free API available.
+- Glassnode requires a $999/mo Professional plan for API access
+- CoinMetrics `CapRealUSD` returns 403 on the community (free) tier
+- blockchain.com has no realized cap endpoint
+- Computing it client-side requires full UTXO set analysis (needs a full node)
+
+The overlay chip is hidden in the current build. Infrastructure (CoreData type, enum case, `computeOverlays()` logic) is retained for a future paid data source integration.
 
 ---
 
@@ -286,15 +294,9 @@ Where k = 2 / (n + 1)
 - Market cap
 
 **blockchain.com (Free):**
-- Realized cap
 - Active addresses (historical)
 
-**CoinMetrics (Free tier):**
-- MVRV components
-- HODL waves data
-- LTH supply
-- Realized price
-
 **For V2 (Paid services):**
-- Glassnode: Most comprehensive on-chain data
+- Glassnode: Most comprehensive on-chain data (API requires $999/mo Professional plan)
 - CryptoQuant: Professional analytics
+- CoinMetrics: `CapRealUSD` and MVRV components (paid tier required)

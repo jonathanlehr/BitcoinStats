@@ -9,7 +9,7 @@ import Foundation
 import os
 
 /// Handles network requests to supplementary data sources:
-/// CoinGecko (market cap, historical price) and blockchain.com (realized cap, active addresses).
+/// CoinGecko (market cap, historical price) and blockchain.com (on-chain charts).
 /// `nonisolated` opts this type out of the project's default MainActor isolation.
 nonisolated final class SupplementaryAPIService: Sendable {
 
@@ -22,7 +22,7 @@ nonisolated final class SupplementaryAPIService: Sendable {
     private let coinGeckoBaseURL: URL
     private let blockchainBaseURL: URL
     /// Optional CoinGecko Demo API key. Set via `x-cg-demo-api-key` header.
-    /// Required for `days=max` on the free tier. Obtain at https://www.coingecko.com/en/api/pricing
+    /// Obtain at https://www.coingecko.com/en/api/pricing
     private let coinGeckoAPIKey: String?
 
     init(
@@ -34,12 +34,13 @@ nonisolated final class SupplementaryAPIService: Sendable {
         self.client = client
         self.coinGeckoBaseURL = coinGeckoBaseURL
         self.blockchainBaseURL = blockchainBaseURL
-        let key = coinGeckoAPIKey?.isEmpty == false ? coinGeckoAPIKey : nil
-        self.coinGeckoAPIKey = key
-        if key != nil {
+
+        let cgKey = coinGeckoAPIKey?.isEmpty == false ? coinGeckoAPIKey : nil
+        self.coinGeckoAPIKey = cgKey
+        if cgKey != nil {
             Self.logger.info("CoinGecko API key loaded from bundle")
         } else {
-            Self.logger.warning("No CoinGecko API key found — days=max requests will likely 401")
+            Self.logger.warning("No CoinGecko API key — days=max requests will likely 401")
         }
     }
 
@@ -207,3 +208,4 @@ nonisolated struct BlockchainChartDataPoint: Codable, Sendable {
     let x: Int      // Unix timestamp
     let y: Double    // Value
 }
+

@@ -59,6 +59,7 @@ See Documentation/ folder for complete architecture:
 3. Follow established patterns in Services/ layer
 4. Run tests after making changes
 5. Use XcodeBuildMCP tools for building/testing
+6. This is an example app; do not use APIs that require a paid subscription
 
 ## Testing
 Run tests with:

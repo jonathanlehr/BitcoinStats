@@ -11,13 +11,20 @@ import Foundation
 /// All methods are stateless and operate on sorted (oldest-first) ChartDataPoint arrays.
 nonisolated enum CalculationService {
 
-    // MARK: - MA Periods (in daily data points, per MetricsDefinitions.md)
+    // MARK: - MA Periods
 
-    static let period200WeekMA  = 200 * 7   // 1400 days
+    /// Minimum days of daily data required before weekly resampling has enough history.
+    /// Used by needsHistoryRefresh() — not a calculation period.
+    static let minDailyHistory  = 200 * 7   // 1400 days to cover 200 weekly candles
+
+    /// Applied to weekly-resampled data (one point per week) to match TradingView.
+    static let period200WeekMA  = 200
+    static let period20WeekMA   = 20
+    static let period21WeekEMA  = 21
+
+    /// Applied to daily data.
     static let period200DayMA   = 200
     static let period50DayMA    = 50
-    static let period20WeekMA   = 20 * 7    // 140 days
-    static let period21WeekEMA  = 21 * 7    // 147 days
 
     // MARK: - Simple Moving Average
 
@@ -44,6 +51,29 @@ nonisolated enum CalculationService {
             result.append(ChartDataPoint(date: data[i].date, value: runningSum / Double(period)))
         }
         return result
+    }
+
+    // MARK: - Weekly Resampling
+
+    /// Collapses a daily price series into weekly closes (ISO 8601 weeks, UTC).
+    ///
+    /// For each calendar week, the data point with the latest date is kept.
+    /// This matches how TradingView constructs weekly candles for weekly MAs.
+    static func weeklyResample(data: [ChartDataPoint]) -> [ChartDataPoint] {
+        guard !data.isEmpty else { return [] }
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        var buckets: [String: ChartDataPoint] = [:]
+        for point in data {
+            let comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: point.date)
+            let key = "\(comps.yearForWeekOfYear ?? 0)-W\(comps.weekOfYear ?? 0)"
+            if let existing = buckets[key] {
+                if point.date > existing.date { buckets[key] = point }
+            } else {
+                buckets[key] = point
+            }
+        }
+        return buckets.values.sorted { $0.date < $1.date }
     }
 
     // MARK: - Exponential Moving Average

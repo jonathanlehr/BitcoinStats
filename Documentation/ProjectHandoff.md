@@ -103,8 +103,8 @@ User-selectable overlays on the primary price chart:
 - 21-week EMA
 
 **Key Levels:**
-- Realized Price
 - **Bull Market Support Band** (area between 20w MA and 21w EMA)
+- Realized Price — deferred (no free API; requires paid Glassnode/CoinMetrics subscription)
 
 **Default enabled:** 200-week MA + Bull Market Support Band
 
@@ -244,8 +244,8 @@ extension Metric {
 
 **Supplementary:**
 - CoinGecko: Historical price (free tier)
-- blockchain.com: Realized cap, active addresses (free)
-- CoinMetrics: MVRV components, HODL waves (free tier)
+- blockchain.com: Active addresses (free)
+- Glassnode/CoinMetrics: Realized cap and MVRV components — paid tier required, deferred to V2
 
 ### Caching Strategy
 - **Real-time metrics** (mempool, price): 30-second polling
