@@ -1,5 +1,12 @@
+//
+//  MarketCapViewModel.swift
+//  BitcoinStats
+//
+//  Created by Jonathan Lehr on 2/16/26.
+//
+
 import Foundation
-import os
+import OSLog
 
 @Observable
 class MarketCapViewModel {
