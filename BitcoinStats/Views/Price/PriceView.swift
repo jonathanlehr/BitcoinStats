@@ -11,6 +11,8 @@ import SwiftUI
 struct PriceView: View {
 
     @State private var viewModel = PriceViewModel()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var wasInBackground = false
 
     var body: some View {
         NavigationStack {
@@ -18,6 +20,14 @@ struct PriceView: View {
                 .navigationTitle("Price")
                 .task(id: viewModel.selectedTimeRange) {
                     await viewModel.load()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .background {
+                        wasInBackground = true
+                    } else if newPhase == .active, wasInBackground {
+                        wasInBackground = false
+                        Task { await viewModel.load() }
+                    }
                 }
         }
     }
@@ -85,11 +95,33 @@ struct PriceView: View {
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
+            if let change = priceChange {
+                Text(formattedChange(change.delta, change.percent))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(change.delta >= 0 ? Color.green : Color.red)
+            }
             Text("Bitcoin (BTC)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var priceChange: (delta: Double, percent: Double)? {
+        guard let current = viewModel.currentPrice,
+              let start = viewModel.priceHistory.first?.value,
+              start > 0 else { return nil }
+        let delta = current - start
+        return (delta, delta / start * 100)
+    }
+
+    private func formattedChange(_ delta: Double, _ percent: Double) -> String {
+        let sign = delta >= 0 ? "+" : "-"
+        let absDelta = abs(delta)
+        let formatter = absDelta >= 1 ? Self.currencyFormatter0Decimals : Self.currencyFormatter2Decimals
+        let dollars = formatter.string(from: NSNumber(value: absDelta)) ?? "$0"
+        let pct = String(format: "%.2f%%", abs(percent))
+        return "\(sign)\(dollars) (\(sign)\(pct))"
     }
 
     private var priceChart: some View {
@@ -226,6 +258,26 @@ struct PriceView: View {
         ![ PriceOverlay.ma20week, .ema21week, .ma200day, .ma50day, .realizedPrice ].contains($0)
     }
 
+    /// Shared NumberFormatter for currency formatting with 0 decimal places.
+    private static let currencyFormatter0Decimals: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "$"
+        formatter.maximumFractionDigits = 0
+        formatter.minimumFractionDigits = 0
+        return formatter
+    }()
+
+    /// Shared NumberFormatter for currency formatting with 2 decimal places.
+    private static let currencyFormatter2Decimals: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "$"
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
+        return formatter
+    }()
+
     private var overlayToggleRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -327,9 +379,9 @@ struct PriceView: View {
         if price >= Self.million {
             return String(format: "$%.1fM", price / Self.million)
         } else if price >= Self.thousand {
-            return String(format: "$%.0fK", price / Self.thousand)
+            return (Self.currencyFormatter0Decimals.string(from: NSNumber(value: price / Self.thousand)) ?? "$0").appending("K")
         }
-        return String(format: "$%.0f", price)
+        return Self.currencyFormatter0Decimals.string(from: NSNumber(value: price)) ?? "$0"
     }
 }
 
