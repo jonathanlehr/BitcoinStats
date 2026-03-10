@@ -17,10 +17,10 @@ struct MarketCapView: View {
 
     private var marketCapContent: some View {
         VStack(spacing: 0) {
-            chartArea
-                .padding(.horizontal)
             timeRangePicker
                 .padding(.vertical, 8)
+            chartArea
+                .padding(.horizontal)
             metricDescription
         }
     }

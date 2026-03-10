@@ -21,10 +21,10 @@ struct MayerMultipleView: View {
                 .padding(.horizontal)
                 .padding(.top, 12)
                 .padding(.bottom, 16)
-            chartArea
-                .padding(.horizontal)
             timeRangePicker
                 .padding(.vertical, 8)
+            chartArea
+                .padding(.horizontal)
             metricDescription
         }
     }

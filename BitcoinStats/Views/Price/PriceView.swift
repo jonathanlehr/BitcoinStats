@@ -30,12 +30,12 @@ struct PriceView: View {
                 .padding(.horizontal)
                 .padding(.top, 12)
                 .padding(.bottom, 16)
+            timeRangePicker
+                .padding(.vertical, 8)
             chartArea
                 .padding(.horizontal)
             overlayToggleRow
                 .padding(.top, 10)
-            timeRangePicker
-                .padding(.vertical, 8)
             metricDescription
         }
     }
