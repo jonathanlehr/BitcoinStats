@@ -18,17 +18,31 @@ struct PriceView: View {
         NavigationStack {
             priceContent
                 .navigationTitle("Price")
-                .task(id: viewModel.selectedTimeRange) {
+                .task {
                     await viewModel.load()
+                    viewModel.startPeriodicUpdates()
+                }
+                .onChange(of: viewModel.selectedTimeRange) { _, _ in
+                    Task {
+                        await viewModel.load()
+                        viewModel.startPeriodicUpdates()
+                    }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .background {
                         wasInBackground = true
+                        viewModel.stopPeriodicUpdates()
                     } else if newPhase == .active, wasInBackground {
                         wasInBackground = false
                         Task { await viewModel.load() }
+                        viewModel.startPeriodicUpdates()
                     }
                 }
+        }
+        .onAppear {
+            Task {
+                await viewModel.load()
+            }
         }
     }
 
@@ -232,7 +246,7 @@ struct PriceView: View {
             }
         }
         // Force a full chart rebuild when the time range changes so the x-axis format updates.
-        .id(viewModel.selectedTimeRange)
+        .id(UserPreferences.shared.selectedTimeRange)
     }
 
     // MARK: - Constants

@@ -29,6 +29,9 @@ class PriceViewModel {
     /// CoinGecko returns timestamps in milliseconds; divide by this to get seconds.
     private static let millisecondsPerSecond: Double = 1_000
 
+    /// Interval for periodic price updates (5 minutes).
+    private static let updateInterval: TimeInterval = 300
+
     // MARK: - Published State
 
     private(set) var priceHistory: [ChartDataPoint] = []
@@ -57,6 +60,10 @@ class PriceViewModel {
         let fetchedAt: Date
     }
     private var granularCache: [TimeRange: GranularCacheEntry] = [:]
+
+    // MARK: - Periodic Updates
+
+    private var updateTimer: Timer?
 
     // MARK: - Dependencies
 
@@ -98,6 +105,22 @@ class PriceViewModel {
         await fetchAllTimeHistory()
 
         computeOverlays()
+    }
+
+    // MARK: - Periodic Updates
+
+    /// Starts periodic updates every 5 minutes to refresh price data.
+    func startPeriodicUpdates() {
+        guard updateTimer == nil else { return }
+        updateTimer = Timer.scheduledTimer(withTimeInterval: Self.updateInterval, repeats: true) { [weak self] _ in
+            Task { await self?.load() }
+        }
+    }
+
+    /// Stops periodic updates.
+    func stopPeriodicUpdates() {
+        updateTimer?.invalidate()
+        updateTimer = nil
     }
 
     // MARK: - Overlay Toggling
