@@ -37,7 +37,7 @@ struct MVRVView: View {
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 280)
+                .frame(height: 280)
         } else {
             Chart {
                 ForEach(viewModel.history) { point in
@@ -80,7 +80,7 @@ struct MVRVView: View {
     }
 }
 
-struct Preview: PreviewProvider {
+struct MVRVView_Previews: PreviewProvider {
     static var previews: some View {
         MVRVView()
     }

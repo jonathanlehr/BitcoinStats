@@ -91,7 +91,7 @@ struct MarketCapView: View {
     }
 }
 
-struct Preview: PreviewProvider {
+struct MarketCapView_Previews: PreviewProvider {
     static var previews: some View {
         MarketCapView()
     }
