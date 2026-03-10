@@ -21,6 +21,11 @@ enum TimeRange: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The approximate number of calendar days this range spans.
+    ///
+    /// Used to build date-filtered CoreData fetch requests and to determine which
+    /// API to call. `.allTime` returns a large sentinel value (5,000) rather than
+    /// a precise day count — the intent is "fetch everything available."
     var days: Int {
         switch self {
         case .day: 1
@@ -30,7 +35,7 @@ enum TimeRange: String, CaseIterable, Identifiable {
         case .sixMonths: 180
         case .year: 365
         case .twoYears: 730
-        case .allTime: 5000
+        case .allTime: 5_000
         }
     }
 

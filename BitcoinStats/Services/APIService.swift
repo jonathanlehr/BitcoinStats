@@ -21,6 +21,11 @@ nonisolated final class APIService: Sendable {
     private let client: HTTPClient
     private let baseURL: URL
 
+    /// - Parameters:
+    ///   - client: The HTTP client used for network requests. Defaults to `URLSession.shared`;
+    ///     inject a mock in tests to avoid real network calls.
+    ///   - baseURL: The mempool.space API base URL. Overridable for testing; the default
+    ///     is a compile-time constant so the force-unwrap is safe.
     init(client: HTTPClient = URLSession.shared,
          baseURL: URL = URL(string: "https://mempool.space")!) {
         self.client = client

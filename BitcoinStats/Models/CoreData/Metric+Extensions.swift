@@ -10,7 +10,10 @@ import Foundation
 
 extension Metric {
 
-    /// Maps the raw string stored in CoreData back to the MetricType enum.
+    /// Converts the raw string stored in CoreData back to a `MetricType` enum case.
+    ///
+    /// Falls back to `.price` if the stored value is missing or doesn't match any
+    /// known case — this guards against stale data after a `MetricType` rename.
     var metricType: MetricType {
         MetricType(rawValue: metricTypeRaw ?? "Price") ?? .price
     }

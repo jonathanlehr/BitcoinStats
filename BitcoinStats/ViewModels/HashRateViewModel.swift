@@ -16,6 +16,18 @@ class HashRateViewModel {
         category: "HashRateViewModel"
     )
 
+    // MARK: - Constants
+
+    /// Conversion factor from hashes per second (H/s) to exahashes per second (EH/s).
+    ///
+    /// The SI "exa" prefix equals 10^18. mempool.space returns `avgHashrate` in raw H/s;
+    /// all stored values and UI display use EH/s to keep numbers human-readable
+    /// (e.g. 600 EH/s rather than 600,000,000,000,000,000,000 H/s).
+    private static let hPerSecToEHPerSec: Double = 1e18
+
+    /// Hash rate history is considered stale after this interval and will be re-fetched.
+    private static let historyStaleInterval: TimeInterval = 3_600  // 1 hour
+
     // MARK: - Published State
 
     /// Current network hash rate in EH/s.
@@ -60,14 +72,14 @@ class HashRateViewModel {
 
                 // Prefer the explicit current value; fall back to the most recent history point.
                 let latestRaw = response.currentHashrate ?? response.hashrates.last?.avgHashrate ?? 0
-                currentHashrate = latestRaw / 1e18  // H/s → EH/s
-                Self.logger.info("Current hash rate: \(String(format: "%.1f", latestRaw / 1e18), privacy: .public) EH/s")
+                currentHashrate = latestRaw / Self.hPerSecToEHPerSec
+                Self.logger.info("Current hash rate: \(String(format: "%.1f", latestRaw / Self.hPerSecToEHPerSec), privacy: .public) EH/s")
 
                 try dataService.deleteMetrics(type: .hashRate)
                 let responses = response.hashrates.map { point in
                     APIMetricResponse(
                         timestamp: Date(timeIntervalSince1970: TimeInterval(point.timestamp)),
-                        value: point.avgHashrate / 1e18  // H/s → EH/s
+                        value: point.avgHashrate / Self.hPerSecToEHPerSec
                     )
                 }
                 try dataService.saveMetrics(type: .hashRate, responses: responses)
@@ -78,8 +90,8 @@ class HashRateViewModel {
                 Self.logger.debug("Hash rate history is current — fetching live value only")
                 let response = try await api.fetchHashrateAndDifficulty(timePeriod: "1m")
                 let latestRaw = response.currentHashrate ?? response.hashrates.last?.avgHashrate ?? 0
-                currentHashrate = latestRaw / 1e18
-                Self.logger.info("Current hash rate: \(String(format: "%.1f", latestRaw / 1e18), privacy: .public) EH/s")
+                currentHashrate = latestRaw / Self.hPerSecToEHPerSec
+                Self.logger.info("Current hash rate: \(String(format: "%.1f", latestRaw / Self.hPerSecToEHPerSec), privacy: .public) EH/s")
             }
         } catch {
             Self.logger.error("Hash rate load failed: \(error, privacy: .public)")
@@ -110,6 +122,6 @@ class HashRateViewModel {
               let timestamp = latest.timestamp else {
             return true
         }
-        return Date().timeIntervalSince(timestamp) > 3_600  // Stale after 1 hour
+        return Date().timeIntervalSince(timestamp) > Self.historyStaleInterval
     }
 }

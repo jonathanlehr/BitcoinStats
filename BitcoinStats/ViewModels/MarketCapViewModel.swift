@@ -54,15 +54,15 @@ class MarketCapViewModel {
 
         do {
             if needsHistoryRefresh() {
-                Self.logger.info("Fetching market cap history from CoinGecko")
-                let chart = try await api.fetchMarketChart(days: "max")
-                Self.logger.info("Received \(chart.market_caps.count) market cap points")
+                Self.logger.info("Fetching market cap history from blockchain.com")
+                let chart = try await api.fetchChartData(chartName: .marketCap, timespan: "all")
+                Self.logger.info("Received \(chart.values.count) market cap points")
 
                 try dataService.deleteMetrics(type: .marketCap)
-                let responses = chart.market_caps.map { point in
+                let responses = chart.values.map { point in
                     APIMetricResponse(
-                        timestamp: Date(timeIntervalSince1970: point[0] / 1_000),
-                        value: point[1]
+                        timestamp: Date(timeIntervalSince1970: TimeInterval(point.x)),
+                        value: point.y
                     )
                 }
                 try dataService.saveMetrics(type: .marketCap, responses: responses)

@@ -18,29 +18,31 @@ struct PersistenceController {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        // Seed sample data for previews
+        // Seed sample data for previews.
+        // NSManagedObject registers itself with the context on init, so no strong
+        // reference is needed — `_ =` silences the unused-result compiler warning.
         let now = Date()
         for i in 0..<30 {
-            let metric = Metric(
+            guard let date = Calendar.current.date(byAdding: .day, value: -i, to: now) else { continue }
+            _ = Metric(
                 context: context,
                 type: .price,
-                timestamp: Calendar.current.date(byAdding: .day, value: -i, to: now)!,
+                timestamp: date,
                 value: Double.random(in: 80_000...105_000)
             )
-            _ = metric
         }
 
         for i in 0..<10 {
-            let candle = PriceCandle(
+            guard let date = Calendar.current.date(byAdding: .day, value: -i, to: now) else { continue }
+            _ = PriceCandle(
                 context: context,
-                timestamp: Calendar.current.date(byAdding: .day, value: -i, to: now)!,
+                timestamp: date,
                 open: Double.random(in: 90_000...95_000),
                 high: Double.random(in: 95_000...105_000),
                 low: Double.random(in: 85_000...90_000),
                 close: Double.random(in: 90_000...100_000),
                 volume: Double.random(in: 10_000...50_000)
             )
-            _ = candle
         }
 
         do {

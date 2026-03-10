@@ -26,9 +26,9 @@ nonisolated enum CalculationService {
     static let period200DayMA   = 200
     static let period50DayMA    = 50
 
-    // MARK: - Simple Moving Average
+    // MARK: - Simple Moving Average (SMA)
 
-    /// Computes an SMA using an O(n) sliding-window algorithm.
+    /// Computes a Simple Moving Average (SMA) using an O(n) sliding-window algorithm.
     ///
     /// The result array is shorter than the input: the first value appears at index `period - 1`
     /// of the input (i.e. once there are enough preceding points to fill the window).
@@ -76,9 +76,9 @@ nonisolated enum CalculationService {
         return buckets.values.sorted { $0.date < $1.date }
     }
 
-    // MARK: - Exponential Moving Average
+    // MARK: - Exponential Moving Average (EMA)
 
-    /// Computes an EMA seeded by the SMA of the first `period` points.
+    /// Computes an Exponential Moving Average (EMA) seeded by the SMA of the first `period` points.
     ///
     /// Smoothing factor: `k = 2 / (period + 1)`
     ///

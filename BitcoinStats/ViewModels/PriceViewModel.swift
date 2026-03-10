@@ -16,6 +16,19 @@ class PriceViewModel {
         category: "PriceViewModel"
     )
 
+    // MARK: - Constants
+
+    /// Maximum number of days for which CoinGecko returns sub-daily granular data.
+    /// Ranges at or below this use CoinGecko for display; longer ranges use the
+    /// all-time daily history stored in CoreData.
+    static let granularFetchMaxDays = 90
+
+    /// One day expressed in seconds. Used for cache staleness checks.
+    private static let oneDaySeconds: TimeInterval = 86_400
+
+    /// CoinGecko returns timestamps in milliseconds; divide by this to get seconds.
+    private static let millisecondsPerSecond: Double = 1_000
+
     // MARK: - Published State
 
     private(set) var priceHistory: [ChartDataPoint] = []
@@ -37,6 +50,8 @@ class PriceViewModel {
 
     // MARK: - In-Memory Granular Cache
 
+    /// Caches short-range granular price data fetched from CoinGecko.
+    /// Entries are valid for 24 hours so toggling between short ranges avoids redundant network calls.
     private struct GranularCacheEntry {
         let data: [ChartDataPoint]
         let fetchedAt: Date
@@ -63,8 +78,13 @@ class PriceViewModel {
 
     // MARK: - Load
 
+    /// Populates the view with cached data immediately, then refreshes from the network.
+    ///
+    /// Three fetches run in sequence so faster calls populate the UI before slower ones complete:
+    /// 1. Current price — mempool.space, fast.
+    /// 2. Granular display data — CoinGecko, short ranges only (≤ 90 days).
+    /// 3. All-time daily history — blockchain.com, needed for MA overlays.
     func load() async {
-        // Show whatever is cached immediately while network requests are in flight.
         loadFromCache()
         computeOverlays()
 
@@ -73,90 +93,9 @@ class PriceViewModel {
         defer { isLoading = false }
         error = nil
 
-        // Step 1 — Current price (mempool.space, fast).
-        do {
-            Self.logger.info("Fetching current price from mempool.space")
-            let price = try await api.fetchCurrentPrice()
-            currentPrice = price.USD
-            Self.logger.info("Current price: $\(String(format: "%.0f", price.USD), privacy: .public)")
-        } catch {
-            Self.logger.error("Current price fetch failed: \(error, privacy: .public)")
-            self.error = error.localizedDescription
-        }
-
-        // Step 2 — Granular display data for short ranges (CoinGecko, ≤ 90 days).
-        // Fetched *before* the heavy all-time history so the chart is immediately responsive.
-        // CoinGecko returns sub-hourly for days=1, hourly for days=2–90.
-        // Results are cached in memory for 24 hours so switching ranges doesn't re-fetch.
-        if selectedTimeRange.days <= 90 {
-            let range = selectedTimeRange
-            let cacheAge = granularCache[range].map { Date().timeIntervalSince($0.fetchedAt) } ?? .infinity
-            if cacheAge < 86_400, let entry = granularCache[range] {
-                Self.logger.debug("Granular cache hit for \(range.rawValue, privacy: .public) (age \(Int(cacheAge), privacy: .public)s)")
-                priceHistory = entry.data
-                if currentPrice == nil { currentPrice = priceHistory.last?.value }
-            } else {
-                do {
-                    Self.logger.info("Fetching granular data (days=\(self.selectedTimeRange.days, privacy: .public)) from CoinGecko")
-                    let chart = try await supplementaryAPI.fetchMarketChart(
-                        days: String(selectedTimeRange.days)
-                    )
-                    Self.logger.info("Received \(chart.prices.count) granular price points")
-                    let points = chart.prices.map { point in
-                        ChartDataPoint(
-                            date: Date(timeIntervalSince1970: point[0] / 1000),
-                            value: point[1]
-                        )
-                    }
-                    granularCache[range] = GranularCacheEntry(data: points, fetchedAt: Date())
-                    priceHistory = points
-                    if currentPrice == nil { currentPrice = priceHistory.last?.value }
-                } catch {
-                    Self.logger.error("Granular display fetch failed: \(error, privacy: .public)")
-                    self.error = error.localizedDescription
-                }
-            }
-        }
-
-        // Step 3 — All-time daily history for MA computation (CoinGecko, days=max).
-        // Fetched after the display data so step 2 is never blocked by this slower request.
-        // Failures here are non-fatal: MAs simply won't render until the next successful fetch.
-        if needsHistoryRefresh() {
-            do {
-                // CoinGecko Demo tier caps historical data at 365 days (error 10012).
-                // Use blockchain.com instead — no auth required, supports timespan=all
-                // back to 2010, giving us the full history needed for MA calculations.
-                Self.logger.info("Fetching full price history from blockchain.com")
-                let chart = try await supplementaryAPI.fetchChartData(
-                    chartName: .marketPrice, timespan: "all"
-                )
-                Self.logger.info("Received \(chart.values.count) price points — saving to CoreData")
-                try dataService.deleteMetrics(type: .price)
-                let responses = chart.values.map { point in
-                    // blockchain.com timestamps are Unix seconds (not ms like CoinGecko).
-                    APIMetricResponse(
-                        timestamp: Date(timeIntervalSince1970: TimeInterval(point.x)),
-                        value: point.y
-                    )
-                }
-                try dataService.saveMetrics(type: .price, responses: responses)
-                Self.logger.info("Price history save complete")
-                if selectedTimeRange.days > 90 { loadFromCache() }
-            } catch {
-                Self.logger.error("Full history fetch failed: \(error, privacy: .public)")
-                if selectedTimeRange.days > 90 {
-                    loadFromCache()
-                    // Surface the error when there's no cached data to fall back on,
-                    // so the user sees a message instead of a blank chart.
-                    if priceHistory.isEmpty {
-                        self.error = error.localizedDescription
-                    }
-                }
-            }
-        } else {
-            Self.logger.debug("Price history is current — skipping full history fetch")
-            if selectedTimeRange.days > 90 { loadFromCache() }
-        }
+        await fetchCurrentPrice()
+        await fetchGranularData()
+        await fetchAllTimeHistory()
 
         computeOverlays()
     }
@@ -171,6 +110,100 @@ class PriceViewModel {
             UserPreferences.shared.enabledPriceOverlays.insert(overlay)
         }
         computeOverlays()
+    }
+
+    // MARK: - Private Fetch Steps
+
+    /// Fetches the live Bitcoin price from mempool.space.
+    /// Always runs; a failure sets `error` but doesn't prevent history from loading.
+    private func fetchCurrentPrice() async {
+        do {
+            Self.logger.info("Fetching current price from mempool.space")
+            let price = try await api.fetchCurrentPrice()
+            currentPrice = price.USD
+            Self.logger.info("Current price: $\(String(format: "%.0f", price.USD), privacy: .public)")
+        } catch {
+            Self.logger.error("Current price fetch failed: \(error, privacy: .public)")
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Fetches sub-daily granular price data from CoinGecko for short time ranges (≤ 90 days).
+    /// Skipped entirely for longer ranges, which use the all-time history instead.
+    /// Results are cached in memory for 24 hours so switching between short ranges is instant.
+    private func fetchGranularData() async {
+        guard selectedTimeRange.days <= Self.granularFetchMaxDays else { return }
+
+        let range = selectedTimeRange
+        let cacheAge = granularCache[range].map { Date().timeIntervalSince($0.fetchedAt) } ?? .infinity
+
+        if cacheAge < Self.oneDaySeconds, let entry = granularCache[range] {
+            Self.logger.debug("Granular cache hit for \(range.rawValue, privacy: .public) (age \(Int(cacheAge), privacy: .public)s)")
+            priceHistory = entry.data
+            if currentPrice == nil { currentPrice = priceHistory.last?.value }
+            return
+        }
+
+        do {
+            Self.logger.info("Fetching granular data (days=\(self.selectedTimeRange.days, privacy: .public)) from CoinGecko")
+            let chart = try await supplementaryAPI.fetchMarketChart(days: String(selectedTimeRange.days))
+            Self.logger.info("Received \(chart.prices.count) granular price points")
+            let points = chart.prices.map { point in
+                // CoinGecko timestamps are milliseconds; divide by 1,000 to get seconds.
+                ChartDataPoint(
+                    date: Date(timeIntervalSince1970: point[0] / Self.millisecondsPerSecond),
+                    value: point[1]
+                )
+            }
+            granularCache[range] = GranularCacheEntry(data: points, fetchedAt: Date())
+            priceHistory = points
+            if currentPrice == nil { currentPrice = priceHistory.last?.value }
+        } catch {
+            Self.logger.error("Granular display fetch failed: \(error, privacy: .public)")
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Fetches the complete daily price history from blockchain.com for MA overlay calculations.
+    /// Skips the network fetch when stored data is fresh. Non-fatal: MA overlays simply won't
+    /// render if this fails and there is no cached fallback.
+    ///
+    /// blockchain.com is used instead of CoinGecko because the CoinGecko Demo tier caps
+    /// historical data at 365 days (error 10012). blockchain.com supports `timespan=all`
+    /// back to 2010 with no authentication.
+    private func fetchAllTimeHistory() async {
+        guard needsHistoryRefresh() else {
+            Self.logger.debug("Price history is current — skipping full history fetch")
+            if selectedTimeRange.days > Self.granularFetchMaxDays { loadFromCache() }
+            return
+        }
+
+        do {
+            Self.logger.info("Fetching full price history from blockchain.com")
+            let chart = try await supplementaryAPI.fetchChartData(chartName: .marketPrice, timespan: "all")
+            Self.logger.info("Received \(chart.values.count) price points — saving to CoreData")
+            try dataService.deleteMetrics(type: .price)
+            let responses = chart.values.map { point in
+                // blockchain.com timestamps are Unix seconds (not milliseconds like CoinGecko).
+                APIMetricResponse(
+                    timestamp: Date(timeIntervalSince1970: TimeInterval(point.x)),
+                    value: point.y
+                )
+            }
+            try dataService.saveMetrics(type: .price, responses: responses)
+            Self.logger.info("Price history save complete")
+            if selectedTimeRange.days > Self.granularFetchMaxDays { loadFromCache() }
+        } catch {
+            Self.logger.error("Full history fetch failed: \(error, privacy: .public)")
+            if selectedTimeRange.days > Self.granularFetchMaxDays {
+                loadFromCache()
+                // Only surface the error when there's no cached data to fall back on,
+                // so the user sees a message rather than a silently blank chart.
+                if priceHistory.isEmpty {
+                    self.error = error.localizedDescription
+                }
+            }
+        }
     }
 
     // MARK: - Private Helpers
@@ -262,7 +295,7 @@ class PriceViewModel {
             }
         }
 
-        // Realized price — loaded from CoreData (populated by Step 4 in load()).
+        // Realized price overlay — data source deferred; no free API currently available.
         if enabled.contains(.realizedPrice) {
             let metrics = (try? dataService.fetchMetrics(type: .realizedPrice)) ?? []
             let points = metrics.compactMap { m -> ChartDataPoint? in
@@ -272,30 +305,42 @@ class PriceViewModel {
             result[.realizedPrice] = filtered(points)
         }
 
-        // Bull Market Support Band: 20W SMA and 21W EMA stored as their actual values.
-        // Do NOT force min/max ordering — the lines cross in real data, and that crossing
-        // is a meaningful signal that must be preserved.
-        if enabled.contains(.bullMarketSupportBand), !sma20.isEmpty, !ema21.isEmpty {
-            let smaFiltered = filtered(sma20)
-            let emaByDate = Dictionary(
-                uniqueKeysWithValues: filtered(ema21).map { ($0.date, $0.value) }
-            )
-            var smaPoints: [ChartDataPoint] = []
-            var emaPoints: [ChartDataPoint] = []
-            for s in smaFiltered {
-                if let e = emaByDate[s.date] {
-                    smaPoints.append(ChartDataPoint(date: s.date, value: s.value))
-                    emaPoints.append(ChartDataPoint(date: s.date, value: e))
-                }
-            }
-            bullBandSMA = smaPoints
-            bullBandEMA = emaPoints
-        } else {
-            bullBandSMA = []
-            bullBandEMA = []
-        }
+        // Bull Market Support Band: align SMA and EMA series by date so only matched
+        // pairs are drawn. Values are stored as-is — the lines intentionally cross in
+        // real data, and that crossing is a meaningful signal.
+        alignBullMarketSupportBand(sma20: sma20, ema21: ema21, filtered: filtered)
 
         overlayData = result
+    }
+
+    /// Pairs SMA and EMA data points by date, storing the aligned results in
+    /// `bullBandSMA` and `bullBandEMA`. Points with no matching counterpart are dropped.
+    private func alignBullMarketSupportBand(
+        sma20: [ChartDataPoint],
+        ema21: [ChartDataPoint],
+        filtered: ([ChartDataPoint]) -> [ChartDataPoint]
+    ) {
+        guard UserPreferences.shared.enabledPriceOverlays.contains(.bullMarketSupportBand),
+              !sma20.isEmpty, !ema21.isEmpty else {
+            bullBandSMA = []
+            bullBandEMA = []
+            return
+        }
+
+        let smaFiltered = filtered(sma20)
+        // Build a date-keyed lookup so each SMA point can find its EMA counterpart in O(1).
+        let emaValueByDate = Dictionary(uniqueKeysWithValues: filtered(ema21).map { ($0.date, $0.value) })
+
+        var smaPoints: [ChartDataPoint] = []
+        var emaPoints: [ChartDataPoint] = []
+        for s in smaFiltered {
+            if let e = emaValueByDate[s.date] {
+                smaPoints.append(ChartDataPoint(date: s.date, value: s.value))
+                emaPoints.append(ChartDataPoint(date: s.date, value: e))
+            }
+        }
+        bullBandSMA = smaPoints
+        bullBandEMA = emaPoints
     }
 
     /// Returns true when the stored daily price history should be re-fetched:
@@ -307,7 +352,7 @@ class PriceViewModel {
               let latestTimestamp = latest.timestamp else {
             return true
         }
-        if Date().timeIntervalSince(latestTimestamp) > 86_400 { return true }
+        if Date().timeIntervalSince(latestTimestamp) > Self.oneDaySeconds { return true }
 
         guard let oldest = try? dataService.oldestMetric(type: .price),
               let oldestTimestamp = oldest.timestamp else {
@@ -315,8 +360,7 @@ class PriceViewModel {
         }
         // minDailyHistory = 1400 days — enough raw data for weeklyResample to produce
         // 200 weekly candles for the 200W MA.
-        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * 86_400
+        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * Self.oneDaySeconds
         return Date().timeIntervalSince(oldestTimestamp) < requiredSpan
     }
-
 }

@@ -36,7 +36,17 @@ struct PriceView: View {
                 .padding(.top, 10)
             timeRangePicker
                 .padding(.vertical, 8)
+            metricDescription
         }
+    }
+
+    private var metricDescription: some View {
+        Text("The spot price of one bitcoin in US dollars. Moving average overlays help identify long-term trends — the 200-week MA and Bull Market Support Band are widely used to gauge where Bitcoin sits within its market cycle.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal)
+            .padding(.top, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -163,7 +173,7 @@ struct PriceView: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+            AxisMarks(values: .automatic(desiredCount: xAxisDesiredCount)) { _ in
                 AxisGridLine()
                 AxisValueLabel(format: xAxisFormat)
             }
@@ -192,6 +202,23 @@ struct PriceView: View {
         // Force a full chart rebuild when the time range changes so the x-axis format updates.
         .id(viewModel.selectedTimeRange)
     }
+
+    // MARK: - Constants
+
+    /// Number of tick marks on the y-axis. Log-linearly spaced by `yAxisValues`.
+    private static let yAxisTickCount = 5
+
+    /// Multiplicative padding applied to the y-axis domain so data never touches the edges.
+    /// Expressed as a fraction of the price range (e.g. 0.03 = 3% headroom above and below).
+    /// Short ranges use tighter padding for a zoomed-in view; long ranges use more room
+    /// because lagging MA lines can sit well below recent prices after a fast rally.
+    private static let chartPadNarrow: Double = 0.03   // 1D, 1W
+    private static let chartPadMedium: Double = 0.06   // 1M, 3M
+    private static let chartPadWide:   Double = 0.12   // 6M+
+
+    /// Thresholds for the abbreviated price label in the y-axis (e.g. "$95K", "$1.2M").
+    private static let million:  Double = 1_000_000
+    private static let thousand: Double = 1_000
 
     /// Overlays shown as toggle chips. Currently only 200W MA and Bull Market Support Band.
     /// Realized Price is hidden until a free data source is available (all current providers require paid plans).
@@ -248,8 +275,8 @@ struct PriceView: View {
         guard lo > 0, hi > lo else { return [] }
         let logLo = log10(lo)
         let logHi = log10(hi)
-        return (0..<5).map { i in
-            pow(10, logLo + Double(i) / 4.0 * (logHi - logLo))
+        return (0..<Self.yAxisTickCount).map { i in
+            pow(10, logLo + Double(i) / Double(Self.yAxisTickCount - 1) * (logHi - logLo))
         }
     }
 
@@ -260,7 +287,7 @@ struct PriceView: View {
     /// if the domain is based on price history alone.
     private var yAxisDomain: ClosedRange<Double> {
         var values = viewModel.priceHistory.map(\.value)
-        if viewModel.selectedTimeRange.days > 90 {
+        if viewModel.selectedTimeRange.days > PriceViewModel.granularFetchMaxDays {
             values += viewModel.bullBandSMA.map(\.value)
             values += viewModel.bullBandEMA.map(\.value)
         }
@@ -269,9 +296,9 @@ struct PriceView: View {
         }
         let pad: Double
         switch viewModel.selectedTimeRange {
-        case .day, .week:             pad = 0.03
-        case .month, .threeMonths:    pad = 0.06
-        default:                      pad = 0.12
+        case .day, .week:             pad = Self.chartPadNarrow
+        case .month, .threeMonths:    pad = Self.chartPadMedium
+        default:                      pad = Self.chartPadWide
         }
         return (lo * (1 - pad))...(hi * (1 + pad))
     }
@@ -282,20 +309,25 @@ struct PriceView: View {
             .dateTime.hour()
         case .week, .month, .threeMonths:
             .dateTime.month(.abbreviated).day()
-        case .sixMonths, .year:
-            .dateTime.month(.abbreviated)
-        case .twoYears:
-            .dateTime.month(.abbreviated).year(.twoDigits)  // e.g. "Feb '24"
+        case .sixMonths, .year, .twoYears:
+            .dateTime.month(.abbreviated).year(.twoDigits)
         case .allTime:
             .dateTime.year()
         }
     }
 
+    private var xAxisDesiredCount: Int {
+        switch viewModel.selectedTimeRange {
+        case .sixMonths, .year, .twoYears, .allTime: 3
+        default: 4
+        }
+    }
+
     private func abbreviatedPrice(_ price: Double) -> String {
-        if price >= 1_000_000 {
-            return String(format: "$%.1fM", price / 1_000_000)
-        } else if price >= 1_000 {
-            return String(format: "$%.0fK", price / 1_000)
+        if price >= Self.million {
+            return String(format: "$%.1fM", price / Self.million)
+        } else if price >= Self.thousand {
+            return String(format: "$%.0fK", price / Self.thousand)
         }
         return String(format: "$%.0f", price)
     }

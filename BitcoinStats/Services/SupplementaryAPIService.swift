@@ -126,12 +126,17 @@ nonisolated final class SupplementaryAPIService: Sendable {
     /// Fetches a single stats value from blockchain.com (e.g., market cap, difficulty).
     ///
     /// Uses: `GET /q/<stat_name>`
+    ///
+    /// - Note: Unlike most JSON APIs, blockchain.com's `/q/*` endpoints return a
+    ///   plain-text number (e.g. `"1882374923.52"`), not a JSON object. The response
+    ///   is parsed directly as a `Double` rather than being decoded with `JSONDecoder`.
     func fetchStat(name: String) async throws -> Double {
         let url = blockchainBaseURL.appendingPathComponent("/q/\(name)")
         let request = URLRequest(url: url)
         let (data, response) = try await client.data(for: request)
         try validate(response)
 
+        // blockchain.com /q/* responses are plain-text numbers, not JSON.
         guard let text = String(data: data, encoding: .utf8),
               let value = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw APIError.invalidResponse

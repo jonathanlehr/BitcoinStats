@@ -4,25 +4,30 @@
 //
 //  Created by Jonathan Lehr on 2/16/26.
 //
+//  Repurposed: originally computed MVRV (requires paid on-chain data).
+//  Now computes the Mayer Multiple (price ÷ 200-day SMA) from the daily
+//  price history already stored in CoreData by PriceViewModel.
+//
 
 import Foundation
 import OSLog
 
 @Observable
-class MVRVViewModel {
+class MayerMultipleViewModel {
 
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "BitcoinStats",
-        category: "MVRVViewModel"
+        category: "MayerMultipleViewModel"
     )
 
-    /// MVRV history is considered stale after this interval and will be re-fetched.
-    private static let historyStaleInterval: TimeInterval = 3_600  // 1 hour
+    private static let oneDaySeconds: TimeInterval = 86_400
 
     // MARK: - Published State
 
-    /// Historical MVRV data for the selected display range.
+    /// Mayer Multiple history filtered to the selected time range.
     private(set) var history: [ChartDataPoint] = []
+    /// The most recent computed Mayer Multiple value.
+    private(set) var currentValue: Double?
     private(set) var isLoading = false
     private(set) var error: String?
 
@@ -32,97 +37,105 @@ class MVRVViewModel {
 
     // MARK: - Dependencies
 
-    private let api: SupplementaryAPIService
+    private let supplementaryAPI: SupplementaryAPIService
     private let dataService: DataService
 
     // MARK: - Init
 
-    init(api: SupplementaryAPIService = SupplementaryAPIService(), dataService: DataService = DataService()) {
-        self.api = api
+    init(
+        supplementaryAPI: SupplementaryAPIService = SupplementaryAPIService(),
+        dataService: DataService = DataService()
+    ) {
+        self.supplementaryAPI = supplementaryAPI
         self.dataService = dataService
     }
 
     // MARK: - Load
 
     func load() async {
-        loadFromCache()
+        // Show whatever is computable from cached data immediately.
+        computeAndLoad()
 
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         error = nil
 
-        do {
-            if needsHistoryRefresh() {
-                Self.logger.info("Fetching data for MVRV calculation")
-                // Fetch market cap and realized price if needed
-                let marketCapChart = try await api.fetchMarketChart(days: "max")
-                let realizedPriceChart = try await api.fetchChartData(chartName: .marketPrice, timespan: "all")  // Placeholder; adjust if realized price API differs
-
-                try dataService.deleteMetrics(type: .marketCap)
-                let marketCapResponses = marketCapChart.market_caps.map { point in
-                    APIMetricResponse(
-                        timestamp: Date(timeIntervalSince1970: point[0] / 1_000),
-                        value: point[1]
-                    )
-                }
-                try dataService.saveMetrics(type: .marketCap, responses: marketCapResponses)
-
-                try dataService.deleteMetrics(type: .realizedPrice)
-                let realizedPriceResponses = realizedPriceChart.values.map { point in
+        // Fetch full price history if it is missing or stale.
+        if needsPriceRefresh() {
+            do {
+                Self.logger.info("Fetching full price history from blockchain.com for Mayer Multiple")
+                let chart = try await supplementaryAPI.fetchChartData(chartName: .marketPrice, timespan: "all")
+                Self.logger.info("Received \(chart.values.count) price points")
+                try dataService.deleteMetrics(type: .price)
+                let responses = chart.values.map { point in
                     APIMetricResponse(
                         timestamp: Date(timeIntervalSince1970: TimeInterval(point.x)),
-                        value: point.y  // Assuming this is realized price; adjust API if needed
+                        value: point.y
                     )
                 }
-                try dataService.saveMetrics(type: .realizedPrice, responses: realizedPriceResponses)
-
-                Self.logger.info("Saved data for MVRV calculation")
-                computeMVRV()
-                loadFromCache()
+                try dataService.saveMetrics(type: .price, responses: responses)
+                computeAndLoad()
+            } catch {
+                Self.logger.error("Price fetch failed: \(error, privacy: .public)")
+                self.error = error.localizedDescription
             }
-        } catch {
-            Self.logger.error("MVRV load failed: \(error, privacy: .public)")
-            self.error = error.localizedDescription
         }
     }
 
     // MARK: - Private Helpers
 
-    private func loadFromCache() {
-        let startDate = Calendar.current.date(
-            byAdding: .day,
-            value: -selectedTimeRange.days,
-            to: Date()
-        )
-        let metrics = (try? dataService.fetchMetrics(type: .mvrv, since: startDate)) ?? []
-        history = metrics.compactMap { metric in
-            guard let date = metric.timestamp else { return nil }
-            return ChartDataPoint(date: date, value: metric.value)
-        }
-    }
-
-    private func computeMVRV() {
-        let marketCapMetrics = (try? dataService.fetchMetrics(type: .marketCap)) ?? []
-        let realizedPriceMetrics = (try? dataService.fetchMetrics(type: .realizedPrice)) ?? []
-
-        // Simple calculation: MVRV = marketCap / realizedPrice
-        // Align by date (simplified; use interpolation for better accuracy)
-        var mvrvPoints: [APIMetricResponse] = []
-        for mc in marketCapMetrics {
-            if let rp = realizedPriceMetrics.first(where: { abs($0.timestamp.timeIntervalSince(mc.timestamp)) < 86_400 }), rp.value > 0 {
-                let mvrv = mc.value / rp.value
-                mvrvPoints.append(APIMetricResponse(timestamp: mc.timestamp, value: mvrv))
+    /// Derives Mayer Multiple (price ÷ 200-day SMA) from stored price history,
+    /// then filters the result to the selected time range.
+    private func computeAndLoad() {
+        let allMetrics = (try? dataService.fetchMetrics(type: .price)) ?? []
+        let allPoints = allMetrics
+            .compactMap { m -> ChartDataPoint? in
+                guard let date = m.timestamp else { return nil }
+                return ChartDataPoint(date: date, value: m.value)
             }
+            .sorted { $0.date < $1.date }
+
+        guard allPoints.count >= CalculationService.period200DayMA else {
+            history = []
+            currentValue = nil
+            return
         }
-        try? dataService.saveMetrics(type: .mvrv, responses: mvrvPoints)
+
+        let sma200 = CalculationService.sma(data: allPoints, period: CalculationService.period200DayMA)
+
+        // Use uniquingKeysWith in case there are any duplicate dates in stored data.
+        let priceByDate = Dictionary(allPoints.map { ($0.date, $0.value) }, uniquingKeysWith: { _, last in last })
+
+        let allMayer = sma200.compactMap { pt -> ChartDataPoint? in
+            guard let price = priceByDate[pt.date], pt.value > 0 else { return nil }
+            return ChartDataPoint(date: pt.date, value: price / pt.value)
+        }
+
+        currentValue = allMayer.last?.value
+
+        let startDate = Calendar.current.date(byAdding: .day, value: -selectedTimeRange.days, to: Date())
+        if let start = startDate {
+            history = allMayer.filter { $0.date >= start }
+        } else {
+            history = allMayer
+        }
     }
 
-    private func needsHistoryRefresh() -> Bool {
-        guard let latest = try? dataService.latestMetric(type: .mvrv),
-              let timestamp = latest.timestamp else {
+    /// Returns true when the stored daily price history should be re-fetched.
+    /// Mirrors PriceViewModel's needsHistoryRefresh() logic.
+    private func needsPriceRefresh() -> Bool {
+        guard let latest = try? dataService.latestMetric(type: .price),
+              let latestTimestamp = latest.timestamp else {
             return true
         }
-        return Date().timeIntervalSince(timestamp) > Self.historyStaleInterval
+        if Date().timeIntervalSince(latestTimestamp) > Self.oneDaySeconds { return true }
+
+        guard let oldest = try? dataService.oldestMetric(type: .price),
+              let oldestTimestamp = oldest.timestamp else {
+            return true
+        }
+        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * Self.oneDaySeconds
+        return Date().timeIntervalSince(oldestTimestamp) < requiredSpan
     }
 }

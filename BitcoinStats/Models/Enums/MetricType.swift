@@ -89,12 +89,24 @@ enum MetricType: String, CaseIterable, Identifiable {
         }
     }
 
+    // MARK: - Formatting Constants
+
+    private static let billion:  Double = 1_000_000_000
+    private static let trillion: Double = 1_000_000_000_000
+
+    /// Returns a human-readable string for the given raw metric value.
+    ///
+    /// Each case formats according to its natural unit — prices as currency, hash rate
+    /// using `MeasurementFormatter`, ratios as decimals, etc.
+    ///
+    /// - Parameter value: The raw `Double` as stored in CoreData.
+    /// - Returns: A formatted string suitable for display in the UI.
     func format(_ value: Double) -> String {
         switch self {
         case .price, .realizedPrice:
             return value.formatted(.currency(code: "USD"))
         case .marketCap:
-            return "$\(String(format: "%.2f", value / 1_000_000_000))B"
+            return "$\(String(format: "%.2f", value / Self.billion))B"
         case .hashRate:
             let measurement = Measurement(value: value, unit: UnitHashRate.exahashesPerSecond)
             return MeasurementFormatter().string(from: measurement)
@@ -107,7 +119,7 @@ enum MetricType: String, CaseIterable, Identifiable {
         case .lthSupply:
             return String(format: "%.1f%%", value)
         case .difficulty:
-            return String(format: "%.2fT", value / 1_000_000_000_000)
+            return String(format: "%.2fT", value / Self.trillion)
         case .activeAddresses:
             return Int(value).formatted(.number)
         case .hodlWaves:

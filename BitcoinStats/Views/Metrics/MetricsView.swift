@@ -18,11 +18,11 @@ struct MetricsView: View {
                         }
                         .buttonStyle(.plain)
                         NavigationLink {
-                            MVRVView()
+                            MayerMultipleView()
                         } label: {
                             MetricCard(
-                                title: MetricType.mvrv.rawValue,
-                                description: MetricType.mvrv.description,
+                                title: MetricType.mayerMultiple.rawValue,
+                                description: MetricType.mayerMultiple.description,
                                 systemImage: "waveform.path.ecg",
                                 tint: .purple
                             )

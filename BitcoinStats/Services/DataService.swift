@@ -49,6 +49,8 @@ class DataService {
         responses: [APIMetricResponse]
     ) throws {
         for response in responses {
+            // NSManagedObject registers itself with the context on init;
+            // no strong reference is needed here — the context owns the object.
             _ = Metric(
                 context: viewContext,
                 type: type,
@@ -138,6 +140,8 @@ class DataService {
     /// Saves a batch of price candles from API responses.
     func savePriceCandles(responses: [APIPriceCandleResponse]) throws {
         for response in responses {
+            // NSManagedObject registers itself with the context on init;
+            // no strong reference is needed here — the context owns the object.
             _ = PriceCandle(
                 context: viewContext,
                 timestamp: response.timestamp,

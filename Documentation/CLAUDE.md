@@ -60,6 +60,7 @@ See Documentation/ folder for complete architecture:
 4. Run tests after making changes
 5. Use XcodeBuildMCP tools for building/testing
 6. This is an example app; do not use APIs that require a paid subscription
+7. This code is for teaching purposes, so it should be written to strongly favor simplicity and clarity
 
 ## Testing
 Run tests with:

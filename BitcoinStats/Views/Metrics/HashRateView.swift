@@ -34,7 +34,17 @@ struct HashRateView: View {
                 .padding(.horizontal)
             timeRangePicker
                 .padding(.vertical, 8)
+            metricDescription
         }
+    }
+
+    private var metricDescription: some View {
+        Text("The total computational power dedicated to mining Bitcoin blocks, measured in exahashes per second (EH/s). A rising hash rate signals growing miner confidence and a more secure network; a sharp decline can indicate miner capitulation.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal)
+            .padding(.top, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -105,7 +115,7 @@ struct HashRateView: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+            AxisMarks(values: .automatic(desiredCount: xAxisDesiredCount)) { _ in
                 AxisGridLine()
                 AxisValueLabel(format: xAxisFormat)
             }
@@ -156,12 +166,17 @@ struct HashRateView: View {
             .dateTime.hour()
         case .week, .month, .threeMonths:
             .dateTime.month(.abbreviated).day()
-        case .sixMonths, .year:
-            .dateTime.month(.abbreviated)
-        case .twoYears:
+        case .sixMonths, .year, .twoYears:
             .dateTime.month(.abbreviated).year(.twoDigits)
         case .allTime:
             .dateTime.year()
+        }
+    }
+
+    private var xAxisDesiredCount: Int {
+        switch viewModel.selectedTimeRange {
+        case .sixMonths, .year, .twoYears, .allTime: 3
+        default: 4
         }
     }
 
