@@ -1,10 +1,3 @@
-//
-//  MetricsView.swift
-//  BitcoinStats
-//
-//  Created by Jonathan Lehr on 2/16/26.
-//
-
 import SwiftUI
 
 struct MetricsView: View {
@@ -12,6 +5,34 @@ struct MetricsView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12, pinnedViews: .sectionHeaders) {
+                    Section {
+                        NavigationLink {
+                            MarketCapView()
+                        } label: {
+                            MetricCard(
+                                title: MetricType.marketCap.rawValue,
+                                description: MetricType.marketCap.description,
+                                systemImage: "chart.bar.fill",
+                                tint: .blue
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        NavigationLink {
+                            MVRVView()
+                        } label: {
+                            MetricCard(
+                                title: MetricType.mvrv.rawValue,
+                                description: MetricType.mvrv.description,
+                                systemImage: "waveform.path.ecg",
+                                tint: .purple
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    } header: {
+                        Text("Valuation")
+                            .font(.title3.weight(.semibold))
+                            .padding(.top, 8)
+                    }
                     Section {
                         NavigationLink {
                             HashRateView()
