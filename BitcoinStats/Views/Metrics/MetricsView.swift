@@ -58,6 +58,8 @@ struct MetricsView: View {
     }
 }
 
-#Preview {
-    MetricsView()
+struct Preview: PreviewProvider {
+    static var previews: some View {
+        MetricsView()
+    }
 }

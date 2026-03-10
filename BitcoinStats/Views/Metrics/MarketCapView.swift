@@ -37,7 +37,7 @@ struct MarketCapView: View {
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 280)
+                .frame(height: 280)
         } else {
             Chart {
                 ForEach(viewModel.history) { point in
@@ -91,6 +91,8 @@ struct MarketCapView: View {
     }
 }
 
-#Preview {
-    MarketCapView()
+struct Preview: PreviewProvider {
+    static var previews: some View {
+        MarketCapView()
+    }
 }

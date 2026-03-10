@@ -80,6 +80,8 @@ struct MVRVView: View {
     }
 }
 
-#Preview {
-    MVRVView()
+struct Preview: PreviewProvider {
+    static var previews: some View {
+        MVRVView()
+    }
 }
