@@ -8,12 +8,14 @@
 import Charts
 import SwiftUI
 
+@MainActor
 struct PriceView: View {
 
     @State private var viewModel = PriceViewModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var wasInBackground = false
     @State private var showingSummary = false
+    private var preferences = UserPreferences.shared
 
     var body: some View {
         NavigationStack {
@@ -36,7 +38,12 @@ struct PriceView: View {
                     }
                 }
                 .task {
-                    await viewModel.load()
+                    // Only load on first appearance. Tab switches must not retrigger a full
+                    // load — the periodic timer handles staleness, scenePhase handles
+                    // background returns, and onChange(selectedTimeRange) handles range changes.
+                    if viewModel.priceHistory.isEmpty {
+                        await viewModel.load()
+                    }
                     viewModel.startPeriodicUpdates()
                 }
                 .onChange(of: viewModel.selectedTimeRange) { _, _ in
@@ -44,6 +51,9 @@ struct PriceView: View {
                         await viewModel.load()
                         viewModel.startPeriodicUpdates()
                     }
+                }
+                .onChange(of: preferences.refreshInterval) { _, _ in
+                    viewModel.startPeriodicUpdates()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .background {
@@ -55,11 +65,6 @@ struct PriceView: View {
                         viewModel.startPeriodicUpdates()
                     }
                 }
-        }
-        .onAppear {
-            Task {
-                await viewModel.load()
-            }
         }
     }
 
@@ -75,6 +80,7 @@ struct PriceView: View {
                 .padding(.vertical, 8)
             chartArea
                 .padding(.horizontal)
+                .id(preferences.selectedTimeRange.rawValue)
             overlayToggleRow
                 .padding(.top, 10)
             metricDescription
@@ -235,13 +241,13 @@ struct PriceView: View {
                 }
             }
         }
+        .chartYScale(domain: yAxisDomain, type: preferences.priceScale == .log ? .log : .linear)
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: xAxisDesiredCount)) { _ in
                 AxisGridLine()
                 AxisValueLabel(format: xAxisFormat)
             }
         }
-        .chartYScale(domain: yAxisDomain, type: .log)
         .chartYAxis {
             AxisMarks(position: .trailing, values: yAxisValues) { value in
                 AxisGridLine()
@@ -262,8 +268,6 @@ struct PriceView: View {
                     .background(.ultraThinMaterial)
             }
         }
-        // Force a full chart rebuild when the time range changes so the x-axis format updates.
-        .id(UserPreferences.shared.selectedTimeRange)
     }
 
     // MARK: - Constants
@@ -316,7 +320,7 @@ struct PriceView: View {
                     OverlayToggleChip(
                         label: overlay.rawValue,
                         color: overlay.color,
-                        isEnabled: UserPreferences.shared.enabledPriceOverlays.contains(overlay)
+                        isEnabled: preferences.enabledPriceOverlays.contains(overlay)
                     ) {
                         viewModel.toggleOverlay(overlay)
                     }
@@ -350,16 +354,24 @@ struct PriceView: View {
         viewModel.priceHistory.map(\.value).min() ?? 1.0
     }
 
-    /// Exactly 5 values log-linearly spaced across `yAxisDomain`.
+    /// Exactly 5 tick values spaced across `yAxisDomain`.
+    /// Log scale uses log-linear spacing; linear scale uses even spacing.
     /// Passed directly to AxisMarks so Swift Charts can't collapse them to fewer ticks.
     private var yAxisValues: [Double] {
         let lo = yAxisDomain.lowerBound
         let hi = yAxisDomain.upperBound
         guard lo > 0, hi > lo else { return [] }
-        let logLo = log10(lo)
-        let logHi = log10(hi)
-        return (0..<Self.yAxisTickCount).map { i in
-            pow(10, logLo + Double(i) / Double(Self.yAxisTickCount - 1) * (logHi - logLo))
+        let count = Self.yAxisTickCount
+        if preferences.priceScale == .log {
+            let logLo = log10(lo)
+            let logHi = log10(hi)
+            return (0..<count).map { i in
+                pow(10, logLo + Double(i) / Double(count - 1) * (logHi - logLo))
+            }
+        } else {
+            return (0..<count).map { i in
+                lo + Double(i) / Double(count - 1) * (hi - lo)
+            }
         }
     }
 

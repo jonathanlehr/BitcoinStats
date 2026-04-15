@@ -41,8 +41,8 @@ enum TimeRange: String, CaseIterable, Identifiable {
 
     var dataGranularity: DataGranularity {
         switch self {
-        case .day, .week: .hourly
-        case .month, .threeMonths, .sixMonths, .year, .twoYears: .daily
+        case .day, .week, .month, .threeMonths, .sixMonths, .year: .hourly
+        case .twoYears: .daily
         case .allTime: .weekly
         }
     }

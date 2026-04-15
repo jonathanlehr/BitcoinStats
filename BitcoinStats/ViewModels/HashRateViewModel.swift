@@ -58,9 +58,19 @@ class HashRateViewModel {
 
         do {
             if needsHistoryRefresh() {
-                // "all" returns the full history; currentHashrate may be absent on this endpoint.
-                Self.logger.info("Fetching full hash rate history (timePeriod=all) from mempool.space")
-                let response = try await api.fetchHashrateAndDifficulty(timePeriod: "all")
+                // Bootstrap with full history when no data exists; otherwise fetch the last
+                // month and append only records newer than the latest stored timestamp.
+                let latestTimestamp = (try? dataService.latestMetric(type: .hashRate))?.timestamp
+                let isBootstrap = latestTimestamp == nil
+                let timePeriod = isBootstrap ? "all" : "1m"
+                let cutoff = latestTimestamp ?? .distantPast
+
+                // TODO: Persist the last-launch date in UserDefaults. If more than 1 month has
+                // elapsed since the last launch, fall back to "all" so the incremental window
+                // cannot silently miss records.
+
+                Self.logger.info("Fetching hash rate history (timePeriod=\(timePeriod, privacy: .public)) from mempool.space")
+                let response = try await api.fetchHashrateAndDifficulty(timePeriod: timePeriod)
                 Self.logger.info("Received \(response.hashrates.count) hash rate points")
 
                 // Prefer the explicit current value; fall back to the most recent history point.
@@ -68,15 +78,13 @@ class HashRateViewModel {
                 currentHashrate = latestRaw / hPerSecToEHPerSec
                 Self.logger.info("Current hash rate: \(String(format: "%.1f", latestRaw / hPerSecToEHPerSec), privacy: .public) EH/s")
 
-                try dataService.deleteMetrics(type: .hashRate)
-                let responses = response.hashrates.map { point in
-                    APIMetricResponse(
-                        timestamp: Date(timeIntervalSince1970: TimeInterval(point.timestamp)),
-                        value: point.avgHashrate / hPerSecToEHPerSec
-                    )
+                let newResponses = response.hashrates.compactMap { point -> APIMetricResponse? in
+                    let date = Date(timeIntervalSince1970: TimeInterval(point.timestamp))
+                    guard date > cutoff else { return nil }
+                    return APIMetricResponse(timestamp: date, value: point.avgHashrate / hPerSecToEHPerSec)
                 }
-                try dataService.saveMetrics(type: .hashRate, responses: responses)
-                Self.logger.info("Saved \(responses.count) hash rate records to CoreData")
+                Self.logger.info("Inserting \(newResponses.count, privacy: .public) new hash rate records")
+                try await dataService.insertMetrics(type: .hashRate, responses: newResponses)
                 loadFromCache()
             } else {
                 // History is fresh — just grab the current value from a lightweight call.

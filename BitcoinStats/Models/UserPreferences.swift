@@ -23,7 +23,9 @@ class UserPreferences {
         static let selectedMetric = "selectedMetric"
         static let selectedTimeRange = "selectedTimeRange"
         static let miniChartMetrics = "miniChartMetrics"
-        static let colorScheme = "colorScheme"
+        static let colorScheme      = "colorScheme"
+        static let priceScale       = "priceScale"
+        static let refreshInterval  = "refreshInterval"
     }
 
     // MARK: - Defaults
@@ -32,7 +34,9 @@ class UserPreferences {
     static let defaultMetric: MetricType = .price
     static let defaultTimeRange: TimeRange = .month
     static let defaultMiniCharts: [MetricType] = [.mvrv, .mempoolSize, .hashRate]
-    static let defaultColorScheme: AppColorScheme = .system
+    static let defaultColorScheme:     AppColorScheme   = .system
+    static let defaultPriceScale:      PriceScale       = .log
+    static let defaultRefreshInterval: RefreshInterval  = .fiveMinutes
 
     // MARK: - Observed Properties
 
@@ -57,6 +61,14 @@ class UserPreferences {
 
     var colorScheme: AppColorScheme {
         didSet { UserDefaults.standard.set(colorScheme.rawValue, forKey: Keys.colorScheme) }
+    }
+
+    var priceScale: PriceScale {
+        didSet { UserDefaults.standard.set(priceScale.rawValue, forKey: Keys.priceScale) }
+    }
+
+    var refreshInterval: RefreshInterval {
+        didSet { UserDefaults.standard.set(refreshInterval.rawValue, forKey: Keys.refreshInterval) }
     }
 
     // MARK: - Init
@@ -98,6 +110,22 @@ class UserPreferences {
             self.colorScheme = scheme
         } else {
             self.colorScheme = Self.defaultColorScheme
+        }
+
+        // Load price scale
+        if let raw = UserDefaults.standard.string(forKey: Keys.priceScale),
+           let scale = PriceScale(rawValue: raw) {
+            self.priceScale = scale
+        } else {
+            self.priceScale = Self.defaultPriceScale
+        }
+
+        // Load refresh interval
+        if let raw = UserDefaults.standard.string(forKey: Keys.refreshInterval),
+           let interval = RefreshInterval(rawValue: raw) {
+            self.refreshInterval = interval
+        } else {
+            self.refreshInterval = Self.defaultRefreshInterval
         }
     }
 

@@ -54,19 +54,28 @@ class MarketCapViewModel {
 
         do {
             if needsHistoryRefresh() {
-                Self.logger.info("Fetching market cap history from blockchain.com")
-                let chart = try await api.fetchChartData(chartName: .marketCap, timespan: "all")
+                // Bootstrap with full history when no data exists; otherwise fetch the last
+                // 30 days and append only records newer than the latest stored timestamp.
+                let latestTimestamp = (try? dataService.latestMetric(type: .marketCap))?.timestamp
+                let isBootstrap = latestTimestamp == nil
+                let timespan = isBootstrap ? "all" : "30days"
+                let cutoff = latestTimestamp ?? .distantPast
+
+                // TODO: Persist the last-launch date in UserDefaults. If more than 30 days have
+                // elapsed since the last launch, fall back to "all" so the incremental window
+                // cannot silently miss records.
+
+                Self.logger.info("Fetching market cap history from blockchain.com (timespan=\(timespan, privacy: .public))")
+                let chart = try await api.fetchChartData(chartName: .marketCap, timespan: timespan)
                 Self.logger.info("Received \(chart.values.count) market cap points")
 
-                try dataService.deleteMetrics(type: .marketCap)
-                let responses = chart.values.map { point in
-                    APIMetricResponse(
-                        timestamp: Date(timeIntervalSince1970: TimeInterval(point.x)),
-                        value: point.y
-                    )
+                let newResponses = chart.values.compactMap { point -> APIMetricResponse? in
+                    let date = Date(timeIntervalSince1970: TimeInterval(point.x))
+                    guard date > cutoff else { return nil }
+                    return APIMetricResponse(timestamp: date, value: point.y)
                 }
-                try dataService.saveMetrics(type: .marketCap, responses: responses)
-                Self.logger.info("Saved \(responses.count) market cap records to CoreData")
+                Self.logger.info("Inserting \(newResponses.count, privacy: .public) new market cap records")
+                try await dataService.insertMetrics(type: .marketCap, responses: newResponses)
                 loadFromCache()
             }
         } catch {

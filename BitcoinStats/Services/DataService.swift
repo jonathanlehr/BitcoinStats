@@ -22,6 +22,89 @@ class DataService {
         self.persistenceController = persistenceController
     }
 
+    // MARK: - Background Read/Write
+
+    /// Fetches metrics and converts them to ChartDataPoints on a private-queue Core Data context.
+    /// The returned array consists of plain value types and is safe to use on any thread.
+    func fetchChartData(type: MetricType, since startDate: Date? = nil) async -> [ChartDataPoint] {
+        await withCheckedContinuation { continuation in
+            persistenceController.container.performBackgroundTask { context in
+                let request = NSFetchRequest<Metric>(entityName: "Metric")
+                var predicates = [NSPredicate(format: "metricTypeRaw == %@", type.rawValue)]
+                if let startDate {
+                    predicates.append(NSPredicate(format: "timestamp >= %@", startDate as NSDate))
+                }
+                request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+                request.sortDescriptors = [NSSortDescriptor(keyPath: \Metric.timestamp, ascending: true)]
+                let metrics = (try? context.fetch(request)) ?? []
+                let points: [ChartDataPoint] = metrics.compactMap { metric in
+                    guard let date = metric.timestamp else { return nil }
+                    return ChartDataPoint(date: date, value: metric.value)
+                }
+                continuation.resume(returning: points)
+            }
+        }
+    }
+
+    /// Inserts metric records on a private-queue Core Data context without deleting anything.
+    /// The caller is responsible for filtering to only new records before calling this method.
+    /// A no-op (no save) when `responses` is empty.
+    func insertMetrics(type: MetricType, responses: [APIMetricResponse]) async throws {
+        guard !responses.isEmpty else { return }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            persistenceController.container.performBackgroundTask { context in
+                do {
+                    for response in responses {
+                        _ = Metric(
+                            context: context,
+                            type: type,
+                            timestamp: response.timestamp,
+                            value: response.value
+                        )
+                    }
+                    try context.save()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// Deletes all existing metrics of the given type and inserts replacements,
+    /// entirely on a private-queue Core Data context so the main thread is never blocked.
+    func replaceMetrics(type: MetricType, with responses: [APIMetricResponse]) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            persistenceController.container.performBackgroundTask { context in
+                do {
+                    let deleteRequest = NSFetchRequest<NSFetchRequestResult>(entityName: "Metric")
+                    deleteRequest.predicate = NSPredicate(format: "metricTypeRaw == %@", type.rawValue)
+                    let batchDelete = NSBatchDeleteRequest(fetchRequest: deleteRequest)
+                    batchDelete.resultType = .resultTypeObjectIDs
+                    let result = try context.execute(batchDelete) as? NSBatchDeleteResult
+                    if let ids = result?.result as? [NSManagedObjectID], !ids.isEmpty {
+                        NSManagedObjectContext.mergeChanges(
+                            fromRemoteContextSave: [NSDeletedObjectsKey: ids],
+                            into: [self.persistenceController.container.viewContext]
+                        )
+                    }
+                    for response in responses {
+                        _ = Metric(
+                            context: context,
+                            type: type,
+                            timestamp: response.timestamp,
+                            value: response.value
+                        )
+                    }
+                    try context.save()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     // MARK: - Metric Operations
 
     /// Saves a single metric data point.

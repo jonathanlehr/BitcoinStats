@@ -71,6 +71,36 @@ nonisolated final class SupplementaryAPIService: Sendable {
         return try JSONDecoder().decode(CoinGeckoMarketResponse.self, from: data)
     }
 
+    /// Fetches historical Bitcoin price data from CoinGecko for a specific date range.
+    ///
+    /// When (to − from) ≤ 90 days the CoinGecko free tier automatically returns hourly
+    /// granularity; above 90 days it falls back to daily. Use `fetchMarketChart(days:)`
+    /// for simple trailing-N-day requests; use this method when precise window boundaries
+    /// are needed (e.g. multi-window stitching to keep each window hourly).
+    ///
+    /// Uses: `GET /api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=<unix>&to=<unix>`
+    func fetchMarketChartRange(from: Date, to: Date) async throws -> CoinGeckoChartResponse {
+        var components = URLComponents(
+            url: coinGeckoBaseURL.appendingPathComponent("/api/v3/coins/bitcoin/market_chart/range"),
+            resolvingAgainstBaseURL: false
+        )!
+        components.queryItems = [
+            URLQueryItem(name: "vs_currency", value: "usd"),
+            URLQueryItem(name: "from", value: String(Int(from.timeIntervalSince1970))),
+            URLQueryItem(name: "to", value: String(Int(to.timeIntervalSince1970)))
+        ]
+        var request = URLRequest(url: components.url!)
+        if let key = coinGeckoAPIKey { request.setValue(key, forHTTPHeaderField: "x-cg-demo-api-key") }
+        Self.logger.debug("fetchMarketChartRange → \(request.url?.absoluteString ?? "nil", privacy: .public)")
+        let (data, response) = try await client.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let body = String(data: data.prefix(500), encoding: .utf8) ?? "<unreadable>"
+            Self.logger.error("fetchMarketChartRange → HTTP \(http.statusCode, privacy: .public): \(body, privacy: .public)")
+        }
+        try validate(response)
+        return try JSONDecoder().decode(CoinGeckoChartResponse.self, from: data)
+    }
+
     /// Fetches historical Bitcoin price data from CoinGecko.
     ///
     /// - Parameter days: Number of days of historical data (e.g. 30, 90, 365, "max").

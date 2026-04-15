@@ -59,20 +59,30 @@ class MayerMultipleViewModel {
         defer { isLoading = false }
         error = nil
 
-        // Fetch full price history if it is missing or stale.
+        // Fetch price history if it is missing or stale — bootstrap once, then append-only.
         if needsPriceRefresh() {
+            let latestTimestamp = (try? dataService.latestMetric(type: .price))?.timestamp
+            let oldestTimestamp = (try? dataService.oldestMetric(type: .price))?.timestamp
+            let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * oneDaySeconds
+            let hasEnoughSpan = oldestTimestamp.map { Date().timeIntervalSince($0) >= requiredSpan } ?? false
+            let timespan = hasEnoughSpan ? "30days" : "all"
+            let cutoff = latestTimestamp ?? .distantPast
+
+            // TODO: Persist the last-launch date in UserDefaults. If more than 30 days have
+            // elapsed since the last launch, fall back to "all" so the incremental window
+            // cannot silently miss records.
+
             do {
-                Self.logger.info("Fetching full price history from blockchain.com for Mayer Multiple")
-                let chart = try await supplementaryAPI.fetchChartData(chartName: .marketPrice, timespan: "all")
+                Self.logger.info("Fetching price history for Mayer Multiple (timespan=\(timespan, privacy: .public))")
+                let chart = try await supplementaryAPI.fetchChartData(chartName: .marketPrice, timespan: timespan)
                 Self.logger.info("Received \(chart.values.count) price points")
-                try dataService.deleteMetrics(type: .price)
-                let responses = chart.values.map { point in
-                    APIMetricResponse(
-                        timestamp: Date(timeIntervalSince1970: TimeInterval(point.x)),
-                        value: point.y
-                    )
+                let newResponses = chart.values.compactMap { point -> APIMetricResponse? in
+                    let date = Date(timeIntervalSince1970: TimeInterval(point.x))
+                    guard date > cutoff else { return nil }
+                    return APIMetricResponse(timestamp: date, value: point.y)
                 }
-                try dataService.saveMetrics(type: .price, responses: responses)
+                Self.logger.info("Inserting \(newResponses.count, privacy: .public) new price records")
+                try await dataService.insertMetrics(type: .price, responses: newResponses)
                 computeAndLoad()
             } catch {
                 Self.logger.error("Price fetch failed: \(error, privacy: .public)")
