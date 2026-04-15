@@ -20,8 +20,6 @@ class MayerMultipleViewModel {
         category: "MayerMultipleViewModel"
     )
 
-    private static let oneDaySeconds: TimeInterval = 86_400
-
     // MARK: - Published State
 
     /// Mayer Multiple history filtered to the selected time range.
@@ -129,13 +127,13 @@ class MayerMultipleViewModel {
               let latestTimestamp = latest.timestamp else {
             return true
         }
-        if Date().timeIntervalSince(latestTimestamp) > Self.oneDaySeconds { return true }
+        if Date().timeIntervalSince(latestTimestamp) > oneDaySeconds { return true }
 
         guard let oldest = try? dataService.oldestMetric(type: .price),
               let oldestTimestamp = oldest.timestamp else {
             return true
         }
-        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * Self.oneDaySeconds
+        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * oneDaySeconds
         return Date().timeIntervalSince(oldestTimestamp) < requiredSpan
     }
 }

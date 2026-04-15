@@ -13,11 +13,28 @@ struct PriceView: View {
     @State private var viewModel = PriceViewModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var wasInBackground = false
+    @State private var showingSummary = false
 
     var body: some View {
         NavigationStack {
             priceContent
                 .navigationTitle("Price")
+                .toolbar {
+                    if #available(iOS 18.1, *) {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                showingSummary = true
+                            } label: {
+                                Image(systemName: "sparkles")
+                            }
+                        }
+                    }
+                }
+                .sheet(isPresented: $showingSummary) {
+                    if #available(iOS 18.1, *) {
+                        MarketSummaryView()
+                    }
+                }
                 .task {
                     await viewModel.load()
                     viewModel.startPeriodicUpdates()

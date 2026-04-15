@@ -23,9 +23,6 @@ class PriceViewModel {
     /// all-time daily history stored in CoreData.
     static let granularFetchMaxDays = 90
 
-    /// One day expressed in seconds. Used for cache staleness checks.
-    private static let oneDaySeconds: TimeInterval = 86_400
-
     /// CoinGecko returns timestamps in milliseconds; divide by this to get seconds.
     private static let millisecondsPerSecond: Double = 1_000
 
@@ -160,7 +157,7 @@ class PriceViewModel {
         let range = selectedTimeRange
         let cacheAge = granularCache[range].map { Date().timeIntervalSince($0.fetchedAt) } ?? .infinity
 
-        if cacheAge < Self.oneDaySeconds, let entry = granularCache[range] {
+        if cacheAge < oneDaySeconds, let entry = granularCache[range] {
             Self.logger.debug("Granular cache hit for \(range.rawValue, privacy: .public) (age \(Int(cacheAge), privacy: .public)s)")
             priceHistory = entry.data
             if currentPrice == nil { currentPrice = priceHistory.last?.value }
@@ -375,7 +372,7 @@ class PriceViewModel {
               let latestTimestamp = latest.timestamp else {
             return true
         }
-        if Date().timeIntervalSince(latestTimestamp) > Self.oneDaySeconds { return true }
+        if Date().timeIntervalSince(latestTimestamp) > oneDaySeconds { return true }
 
         guard let oldest = try? dataService.oldestMetric(type: .price),
               let oldestTimestamp = oldest.timestamp else {
@@ -383,7 +380,7 @@ class PriceViewModel {
         }
         // minDailyHistory = 1400 days — enough raw data for weeklyResample to produce
         // 200 weekly candles for the 200W MA.
-        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * Self.oneDaySeconds
+        let requiredSpan = TimeInterval(CalculationService.minDailyHistory) * oneDaySeconds
         return Date().timeIntervalSince(oldestTimestamp) < requiredSpan
     }
 }
