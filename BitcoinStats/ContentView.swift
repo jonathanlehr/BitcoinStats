@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct ContentView: View {
+
+    private var preferences = UserPreferences.shared
+
     var body: some View {
         TabView {
             Tab("Price", systemImage: "bitcoinsign.circle") {
@@ -20,6 +23,7 @@ struct ContentView: View {
                 SettingsView()
             }
         }
+        .preferredColorScheme(preferences.colorScheme.colorScheme)
     }
 }
 

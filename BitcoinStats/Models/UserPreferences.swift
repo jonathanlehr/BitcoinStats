@@ -23,6 +23,7 @@ class UserPreferences {
         static let selectedMetric = "selectedMetric"
         static let selectedTimeRange = "selectedTimeRange"
         static let miniChartMetrics = "miniChartMetrics"
+        static let colorScheme = "colorScheme"
     }
 
     // MARK: - Defaults
@@ -31,6 +32,7 @@ class UserPreferences {
     static let defaultMetric: MetricType = .price
     static let defaultTimeRange: TimeRange = .month
     static let defaultMiniCharts: [MetricType] = [.mvrv, .mempoolSize, .hashRate]
+    static let defaultColorScheme: AppColorScheme = .system
 
     // MARK: - Observed Properties
 
@@ -51,6 +53,10 @@ class UserPreferences {
             let rawValues = miniChartMetrics.map(\.rawValue)
             UserDefaults.standard.set(rawValues, forKey: Keys.miniChartMetrics)
         }
+    }
+
+    var colorScheme: AppColorScheme {
+        didSet { UserDefaults.standard.set(colorScheme.rawValue, forKey: Keys.colorScheme) }
     }
 
     // MARK: - Init
@@ -84,6 +90,14 @@ class UserPreferences {
             self.miniChartMetrics = rawValues.compactMap { MetricType(rawValue: $0) }
         } else {
             self.miniChartMetrics = Self.defaultMiniCharts
+        }
+
+        // Load color scheme
+        if let raw = UserDefaults.standard.string(forKey: Keys.colorScheme),
+           let scheme = AppColorScheme(rawValue: raw) {
+            self.colorScheme = scheme
+        } else {
+            self.colorScheme = Self.defaultColorScheme
         }
     }
 

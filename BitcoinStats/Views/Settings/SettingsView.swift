@@ -2,19 +2,24 @@
 //  SettingsView.swift
 //  BitcoinStats
 //
-//  Created by Jonathan Lehr on 2/16/26.
-//
 
 import SwiftUI
 
 struct SettingsView: View {
+
+    @Bindable private var preferences = UserPreferences.shared
+
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(
-                "Settings",
-                systemImage: "gearshape",
-                description: Text("Appearance, refresh interval, and data sources — coming soon.")
-            )
+            Form {
+                Section("Appearance") {
+                    Picker("Color Scheme", selection: $preferences.colorScheme) {
+                        ForEach(AppColorScheme.allCases, id: \.self) { scheme in
+                            Text(scheme.rawValue).tag(scheme)
+                        }
+                    }
+                }
+            }
             .navigationTitle("Settings")
         }
     }
