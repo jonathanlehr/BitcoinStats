@@ -19,6 +19,15 @@ struct ContentView: View {
             Tab("Metrics", systemImage: "chart.xyaxis.line") {
                 MetricsView()
             }
+            // Gated behind iOS 26 because the AI tab's contents rely on FoundationModels
+            // features (guided generation with @Generable, tool calling) that are only
+            // available there. The Market Summary sheet on the Price tab continues to
+            // work on iOS 18.1+ as a plain-prompt baseline example.
+            if #available(iOS 26.0, *) {
+                Tab("AI", systemImage: "sparkles") {
+                    AIView()
+                }
+            }
             Tab("Settings", systemImage: "gearshape") {
                 SettingsView()
             }

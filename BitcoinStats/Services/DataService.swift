@@ -14,7 +14,9 @@ class DataService {
 
     let persistenceController: PersistenceController
 
-    var viewContext: NSManagedObjectContext {
+    // viewContext is a main-thread-only NSManagedObjectContext; @MainActor enforces
+    // that callers access it on the right thread.
+    @MainActor var viewContext: NSManagedObjectContext {
         persistenceController.container.viewContext
     }
 
