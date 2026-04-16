@@ -41,11 +41,7 @@ nonisolated final class APIService: Sendable {
     /// { "time": 1703252411, "USD": 43753, "EUR": 40545, ... }
     /// ```
     func fetchCurrentPrice() async throws -> PriceResponse {
-        let url = baseURL.appendingPathComponent("/api/v1/prices")
-        let request = URLRequest(url: url)
-        let (data, response) = try await client.data(for: request)
-        try validate(response)
-        return try JSONDecoder().decode(PriceResponse.self, from: data)
+        try await fetch(request: makeRequest(path: "/api/v1/prices"))
     }
 
     /// Fetches historical Bitcoin price data from mempool.space.
@@ -65,17 +61,11 @@ nonisolated final class APIService: Sendable {
         currency: String = "USD",
         timestamp: Int? = nil
     ) async throws -> HistoricalPriceResponse {
-        var components = URLComponents(url: baseURL.appendingPathComponent("/api/v1/historical-price"), resolvingAgainstBaseURL: false)!
         var queryItems = [URLQueryItem(name: "currency", value: currency)]
         if let timestamp {
             queryItems.append(URLQueryItem(name: "timestamp", value: String(timestamp)))
         }
-        components.queryItems = queryItems
-
-        let request = URLRequest(url: components.url!)
-        let (data, response) = try await client.data(for: request)
-        try validate(response)
-        return try JSONDecoder().decode(HistoricalPriceResponse.self, from: data)
+        return try await fetch(request: makeRequest(path: "/api/v1/historical-price", queryItems: queryItems))
     }
 
     // MARK: - Mempool Endpoints
@@ -88,11 +78,7 @@ nonisolated final class APIService: Sendable {
     ///   "fee_histogram": [[10.5, 123456], ...] }
     /// ```
     func fetchMempoolStats() async throws -> MempoolStatsResponse {
-        let url = baseURL.appendingPathComponent("/api/mempool")
-        let request = URLRequest(url: url)
-        let (data, response) = try await client.data(for: request)
-        try validate(response)
-        return try JSONDecoder().decode(MempoolStatsResponse.self, from: data)
+        try await fetch(request: makeRequest(path: "/api/mempool"))
     }
 
     /// Fetches recommended transaction fees.
@@ -103,11 +89,7 @@ nonisolated final class APIService: Sendable {
     ///   "economyFee": 4, "minimumFee": 1 }
     /// ```
     func fetchRecommendedFees() async throws -> RecommendedFeesResponse {
-        let url = baseURL.appendingPathComponent("/api/v1/fees/recommended")
-        let request = URLRequest(url: url)
-        let (data, response) = try await client.data(for: request)
-        try validate(response)
-        return try JSONDecoder().decode(RecommendedFeesResponse.self, from: data)
+        try await fetch(request: makeRequest(path: "/api/v1/fees/recommended"))
     }
 
     // MARK: - Mining Endpoints
@@ -128,8 +110,7 @@ nonisolated final class APIService: Sendable {
     func fetchHashrateAndDifficulty(
         timePeriod: String = "1m"
     ) async throws -> HashrateResponse {
-        let url = baseURL.appendingPathComponent("/api/v1/mining/hashrate/\(timePeriod)")
-        let request = URLRequest(url: url)
+        let request = makeRequest(path: "/api/v1/mining/hashrate/\(timePeriod)")
         let (data, response) = try await client.data(for: request)
         try validate(response)
         do {
@@ -151,14 +132,27 @@ nonisolated final class APIService: Sendable {
     func fetchDifficultyAdjustments(
         count: Int = 3
     ) async throws -> [[Double]] {
-        let url = baseURL.appendingPathComponent("/api/v1/mining/difficulty-adjustments/\(count)")
-        let request = URLRequest(url: url)
-        let (data, response) = try await client.data(for: request)
-        try validate(response)
-        return try JSONDecoder().decode([[Double]].self, from: data)
+        try await fetch(request: makeRequest(path: "/api/v1/mining/difficulty-adjustments/\(count)"))
     }
 
-    // MARK: - Validation
+    // MARK: - Private Helpers
+
+    /// Builds a URLRequest for the given path and optional query items.
+    private func makeRequest(path: String, queryItems: [URLQueryItem] = []) -> URLRequest {
+        if queryItems.isEmpty {
+            return URLRequest(url: baseURL.appendingPathComponent(path))
+        }
+        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        components.queryItems = queryItems
+        return URLRequest(url: components.url!)
+    }
+
+    /// Executes a request, validates the HTTP status, and decodes the response body.
+    private func fetch<T: Decodable>(request: URLRequest) async throws -> T {
+        let (data, response) = try await client.data(for: request)
+        try validate(response)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
 
     private func validate(_ response: URLResponse) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
