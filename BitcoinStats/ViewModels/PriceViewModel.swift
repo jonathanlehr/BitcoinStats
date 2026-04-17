@@ -132,6 +132,11 @@ class PriceViewModel {
         updateTimer = nil
     }
 
+    /// Fetches only the live price — used by pull-to-refresh so the chart stays put.
+    func refreshCurrentPrice() async {
+        await fetchCurrentPrice()
+    }
+
     // MARK: - Overlay Toggling
 
     /// Toggles an overlay on/off in UserPreferences and recomputes overlay data.

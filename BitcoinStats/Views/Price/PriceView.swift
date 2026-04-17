@@ -71,19 +71,24 @@ struct PriceView: View {
     // MARK: - Subviews
 
     private var priceContent: some View {
-        VStack(spacing: 0) {
-            currentPriceHeader
-                .padding(.horizontal)
-                .padding(.top, 12)
-                .padding(.bottom, 16)
-            timeRangePicker
-                .padding(.vertical, 8)
-            chartArea
-                .padding(.horizontal)
-                .id(preferences.selectedTimeRange.rawValue)
-            overlayToggleRow
-                .padding(.top, 10)
-            metricDescription
+        ScrollView {
+            VStack(spacing: 0) {
+                currentPriceHeader
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+                timeRangePicker
+                    .padding(.vertical, 8)
+                chartArea
+                    .padding(.horizontal)
+                    .id(preferences.selectedTimeRange.rawValue)
+                overlayToggleRow
+                    .padding(.top, 10)
+                metricDescription
+            }
+        }
+        .refreshable {
+            await viewModel.refreshCurrentPrice()
         }
     }
 
